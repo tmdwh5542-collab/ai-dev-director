@@ -4,7 +4,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: publish-prepared-desktop-2026-11-20-3
+  group: publish-prepared-desktop-2026-11-20-4
   cancel-in-progress: false
 jobs:
   publish:
@@ -14,7 +14,7 @@ jobs:
       - name: Read immutable verified release assets
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: a27d9b9bdae0bed67f9100f42d7035bee0eb3ea3
+          ref: 2cdc0274f701d6af1898e14a537386e70cc5a83f
           path: prepared
           persist-credentials: false
       - name: Verify hashes, upload assets, publish draft
@@ -25,11 +25,11 @@ jobs:
           python3 - <<'PYCODE'
           import hashlib, json, os, pathlib, urllib.parse, urllib.request
           repo = 'tmdwh5542-collab/ai-dev-director'
-          tag = 'v2026.11.20.3'
-          source = '04211937dd33173a5eb0acbf51c90118ab957a67'
+          tag = 'v2026.11.20.4'
+          source = '52f99d489279f9273d1a2ce8289ce508e11e831b'
           assert os.environ['GITHUB_REPOSITORY'] == repo
           root = pathlib.Path('prepared')
-          files = ['AI-DEV-DIRECTOR-Windows-2026.11.20.3.zip', 'director-update.json', 'update-public-key.txt', 'RELEASE_NOTES_KO.md', 'SHA256SUMS.txt']
+          files = ['AI-DEV-DIRECTOR-Windows-2026.11.20.4.zip', 'director-update.json', 'update-public-key.txt', 'RELEASE_NOTES_KO.md', 'SHA256SUMS.txt', 'cozy-office-preview.png', 'cozy-walking.mp4']
           for line in (root/'SHA256SUMS.txt').read_text().splitlines():
               digest, name = line.split('  ', 1)
               assert name in files and hashlib.sha256((root/name).read_bytes()).hexdigest() == digest, name
