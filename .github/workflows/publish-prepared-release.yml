@@ -1,0 +1,84 @@
+name: Publish prepared signed desktop release
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: publish-prepared-desktop-2026-11-20-1
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Read immutable verified release assets
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: 42f0be0eec8176e9e6cd958b7d76033c0ac63977
+          path: prepared
+          persist-credentials: false
+      - name: Verify hashes, upload assets, publish draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python3 - <<'PYCODE'
+          import hashlib, json, os, pathlib, urllib.parse, urllib.request
+          repo = 'tmdwh5542-collab/ai-dev-director'
+          tag = 'v2026.11.20.1'
+          source = '1197905211e6af73d6a2b454e7e281de00e25f8b'
+          assert os.environ['GITHUB_REPOSITORY'] == repo
+          root = pathlib.Path('prepared')
+          files = ['AI-DEV-DIRECTOR-Windows-2026.11.20.1.zip', 'director-update.json', 'update-public-key.txt', 'RELEASE_NOTES_KO.md', 'SHA256SUMS.txt']
+          for line in (root/'SHA256SUMS.txt').read_text().splitlines():
+              digest, name = line.split('  ', 1)
+              assert name in files and hashlib.sha256((root/name).read_bytes()).hexdigest() == digest, name
+          payload = json.loads((root/'director-update.json').read_text())['payload']
+          assert payload['version'] == tag[1:] and payload['repository'] == repo
+          assert payload['archive_sha256'] == hashlib.sha256((root/files[0]).read_bytes()).hexdigest()
+          
+          def request(url, method='GET', value=None, binary=None):
+              assert url.startswith('https://api.github.com/repos/'+repo+'/') or url.startswith('https://uploads.github.com/repos/'+repo+'/')
+              headers = {'Authorization': 'Bearer '+os.environ['GH_TOKEN'], 'User-Agent':'AI-DEV-DIRECTOR-Publisher', 'Accept':'application/vnd.github+json', 'X-GitHub-Api-Version':'2022-11-28'}
+              data = binary
+              if value is not None:
+                  data = json.dumps(value).encode()
+                  headers['Content-Type'] = 'application/json'
+              if binary is not None:
+                  headers['Content-Type'] = 'application/octet-stream'
+              with urllib.request.urlopen(urllib.request.Request(url, data=data, headers=headers, method=method), timeout=180) as response:
+                  return json.load(response)
+          
+          api = 'https://api.github.com/repos/'+repo
+          releases = request(api+'/releases?per_page=100')
+          release = next((r for r in releases if r['tag_name'] == tag), None)
+          assert release is not None, 'Expected the prepared draft release'
+          assert release['target_commitish'] == source, 'Release target changed'
+          rid = release['id']
+          if not release['draft']:
+              existing = {a['name']: a for a in request(api+'/releases/'+str(rid)+'/assets')}
+              assert set(existing) == set(files)
+              for name in files:
+                  assert existing[name].get('digest') == 'sha256:'+hashlib.sha256((root/name).read_bytes()).hexdigest()
+              print('Already published and verified: '+release['html_url'])
+          else:
+              existing = {a['name']: a for a in request(api+'/releases/'+str(rid)+'/assets')}
+              assert set(existing) <= set(files), 'Unexpected draft assets'
+              for name in files:
+                  raw = (root/name).read_bytes()
+                  digest = 'sha256:'+hashlib.sha256(raw).hexdigest()
+                  if name in existing:
+                      assert existing[name].get('digest') == digest, 'Existing draft asset differs: '+name
+                      continue
+                  url = 'https://uploads.github.com/repos/'+repo+'/releases/'+str(rid)+'/assets?name='+urllib.parse.quote(name, safe='')
+                  asset = request(url, 'POST', binary=raw)
+                  assert asset['size'] == len(raw) and asset.get('digest') == digest, 'Upload hash mismatch: '+name
+                  print('Verified upload: '+name)
+              uploaded = {a['name']: a for a in request(api+'/releases/'+str(rid)+'/assets')}
+              assert set(uploaded) == set(files)
+              for name in files:
+                  assert uploaded[name].get('digest') == 'sha256:'+hashlib.sha256((root/name).read_bytes()).hexdigest(), name
+              result = request(api+'/releases/'+str(rid), 'PATCH', value={'draft':False,'make_latest':'true'})
+              assert not result['draft']
+              print('Published: '+result['html_url'])
+          PYCODE
