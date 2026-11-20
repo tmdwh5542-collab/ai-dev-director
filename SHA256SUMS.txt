@@ -1,0 +1,4 @@
+2b5dc1c46947dd48c69a18daf8892670c02290e404507ad9656ff754e28e2a00  AI-DEV-DIRECTOR-Windows-2026.11.20.3.zip
+9e68ae388e6329bc71bfa68448403fd7d2729d57f73dbe4ca9cbf4d4b814f5eb  RELEASE_NOTES_KO.md
+d9292346aa9dcd3fb44a280fe5c2b0ba366bbe45b193ac395c4d4f9fd13266ed  director-update.json
+894fc86aa85f85aafd559c322f4cac4ac207c514b29e09d7b0b67cd60ab320bb  update-public-key.txt
