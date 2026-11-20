@@ -76,3 +76,27 @@ body[data-visual-mode=illustrated] .illustrated-meeting{filter:none}
 #scene{position:relative}#office-gpu{position:absolute;left:0;top:0;pointer-events:none;z-index:2}#scene[data-renderer=pixi] #office-scene{position:relative;z-index:1}#scene[data-renderer=pixi] .office-character .illustrated-avatar{opacity:0}#scene[data-renderer=svg] #office-gpu{display:none}
 
 #scene[data-renderer=pixi] .illustrated-avatar *{animation-play-state:paused!important}
+
+/* Reviewed in rendered rooms: conference guests share chair anchors, never desk labels. */
+.workstation[data-meeting-participant=true] .station-caption{display:none!important}
+.office-character[data-state=meeting] .character-nameplate,.office-character[data-state=meeting] .character-speech{visibility:hidden}
+.office-character[data-state=meeting]:hover .character-nameplate,.office-character[data-state=meeting]:focus .character-nameplate,.office-character[data-state=meeting]:focus .character-speech{visibility:visible}
+body[data-visual-mode=illustrated] .illustrated-room-label{fill:#f4ead5;stroke:none;font-size:14px;letter-spacing:1.5px}
+body[data-visual-mode=illustrated] .topbar nav a.selected{background:#263e50;color:#f5dfac;border-color:#8c8063}
+body[data-visual-mode=illustrated] .meeting-form{background:#0c1d2d;border:1px solid #476379;border-radius:12px;padding:16px}
+body[data-visual-mode=illustrated] .meeting-form label,body[data-visual-mode=illustrated] .team-field{color:#c9dce9}
+body[data-visual-mode=illustrated] .brief-panel h3,body[data-visual-mode=illustrated] .ledger-panel strong{color:#f0e1c7}
+body[data-visual-mode=illustrated] button:disabled{opacity:1;background:#253746;color:#a8b9c5;border-color:#496073;cursor:not-allowed}
+
+body[data-visual-mode=illustrated] #hermes-task-form{background:#0c1d2d;border:1px solid #476379;border-radius:12px;padding:16px}
+/* These three independent material inputs must not occupy the same explicit grid row. */
+#hermes-task-form{grid-template-columns:minmax(0,1fr);gap:16px}
+#hermes-task-form .meeting-topic,#hermes-task-form>.primary{grid-column:1/-1;grid-row:auto}
+body[data-visual-mode=illustrated] .brief-panel h2{color:#f0e1c7}
+body[data-visual-mode=illustrated] .office-character[data-at-desk=true] .character-nameplate{visibility:hidden}
+body[data-visual-mode=illustrated] .office-character[data-state=meeting]:focus .character-nameplate{visibility:visible}
+@media(max-width:600px){
+ .room-navigation{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+ #room-name{grid-column:1/-1;grid-row:1;text-align:center}
+ #room-prev,#room-next{white-space:nowrap;min-width:0;width:100%}
+}

@@ -16,7 +16,7 @@ from release_version import VERSION
 def payload_files(output=None):
     raw=subprocess.check_output(['git','-C',str(ROOT),'ls-files','--cached','--others','--exclude-standard','-z'])
     candidates=sorted({p.decode('utf-8') for p in raw.split(b'\0') if p});files=[]
-    excluded={'node_modules','.venv','.git','__pycache__','native','build','dist','artifacts','runs','research','.director_worktrees'}
+    excluded={'.github','node_modules','.venv','.git','__pycache__','native','build','dist','artifacts','runs','research','.director_worktrees'}
     for relative in candidates:
         source=ROOT/relative;parts=Path(relative).parts
         if any(part in excluded for part in parts) or not source.is_file() or source.is_symlink() or not source.resolve().is_relative_to(ROOT.resolve()):continue

@@ -29,7 +29,7 @@ function tokenText(total){if(!total)return '—';const value=Number(total.tokens
 function time(iso){if(!iso)return null;const date=new Date(iso+(/Z|[+-]\d\d:\d\d$/.test(iso)?'':'Z'));return Number.isFinite(date.getTime())?date:null;}
 function stamp(iso){const date=time(iso);return date?new Intl.DateTimeFormat('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(date):'—';}
 function createStation(role){
- const d=DEPTS[role],g=document.createElementNS(svgNS,'g');g.id='station-'+role;g.classList.add('workstation');g.setAttribute('role','button');g.setAttribute('tabindex','0');g.setAttribute('aria-label',d.title+' 상세');g.setAttribute('aria-pressed','false');g.setAttribute('transform',`translate(${d.x} ${d.y}) scale(${d.scale||1})`);if(d.memberId)g.classList.add('staff-member');g.style.setProperty('--accent',d.color);g.dataset.busy='false';
+ const d=DEPTS[role],g=document.createElementNS(svgNS,'g');g.id='station-'+role;g.classList.add('workstation');g.setAttribute('role','button');g.setAttribute('tabindex','0');g.setAttribute('aria-label',d.title+' 상세');g.setAttribute('aria-pressed','false');g.setAttribute('transform',`translate(${d.x} ${d.y}) scale(${d.scale||1})`);if(d.memberId)g.classList.add('staff-member');g.style.setProperty('--accent',d.color);g.dataset.busy='false';g.dataset.meetingParticipant=String(!!d.meetingSeat);
  // These SVG strings contain only static, locally defined geometry. API/user text is assigned with textContent below.
  g.innerHTML=`<rect class="selection" x="-112" y="-85" width="224" height="185" rx="6"/>
  <rect class="desk-rug" x="-110" y="-72" width="220" height="156" rx="8" fill="#c5d5dd" opacity=".38"/>
@@ -77,7 +77,7 @@ function renderTeam(){
  const visualRevision=team.revision+data.company.revision+departmentFilter+JSON.stringify(data.visitors||[]);if(teamRevision===visualRevision)return;teamRevision=visualRevision;
  if(!['ceo',...Object.keys(data.team.departments||{})].includes(departmentFilter))departmentFilter='ceo';
  window.OfficeRoom=departmentFilter;
- DEPTS={CEO:{...TEMPLATES.CEO,name:owner?.name||'대표 · 사용자',title:owner?owner.name+' · 대표':'대표 캐릭터 만들기',x:departmentFilter==='ceo'?390:690,y:departmentFilter==='ceo'?210:175,scale:.8}};
+ DEPTS={CEO:{...TEMPLATES.CEO,name:owner?.name||'대표 · 사용자',title:owner?owner.name+' · 대표':'대표 캐릭터 만들기',x:390,y:departmentFilter==='ceo'?210:175,scale:.8}};
  if(departmentFilter==='testing')DEPTS.DIRECTOR={...TEMPLATES.DIRECTOR,x:670,y:490,scale:.7};
  const departmentOf=m=>m.department||({planning:'planning',ui:'design',gameplay:'development',level:'level',testing:'testing',quality:'quality',audio:'design',general:'development'}[m.specialty]||'development');
  const positionOf=m=>m.position||(data.team.default_team.members.some(s=>s.id===m.id)?'manager':'employee');
@@ -90,12 +90,15 @@ function renderTeam(){
  $('room-next').onclick=()=>changeRoom(rooms[(rooms.findIndex(r=>r[0]===departmentFilter)+1)%rooms.length][0]);
  text('room-name',rooms.find(r=>r[0]===departmentFilter)?.[1]);text('office-title',rooms.find(r=>r[0]===departmentFilter)?.[1]);
  $('department-tabs').replaceChildren();for(const [id,name] of rooms){const button=element('button',name);button.type='button';button.dataset.department=id;button.setAttribute('aria-pressed',String(departmentFilter===id));button.onclick=()=>changeRoom(id);$('department-tabs').append(button);}
+ let meetingIndex=0;
  visibleMembers.forEach((member,index)=>{
-  const base=TEMPLATES[member.slot],position=positionOf(member)==='secretary'?[390,485]:destinations.get(member.id)?.reason.includes('협업')?[680,470]:destinations.has(member.id)?[805+(index%2)*155,330+Math.floor(index/2)*75]:STAFF_POSITIONS[index%4];if(!base||!position)return;
+  const visit=destinations.get(member.id),isMeeting=!!visit&&!visit.reason.includes('협업'),seat=isMeeting?window.OfficeMeetingSeat(meetingIndex++):null;
+  const base=TEMPLATES[member.slot],position=seat||(positionOf(member)==='secretary'?[390,485]:visit?[680,470]:STAFF_POSITIONS[index%4]);if(!base||!position)return;
   DEPTS[member.id]={...base,name:member.name,title:member.name+' · '+(data.team.specialties[member.specialty]||member.specialty),purpose:member.duties,
    color:SPECIALTY_COLORS[member.specialty]||'#b5c4d6',x:position[0],y:position[1],scale:.64,character:member.character||{gender:'male',age:30,color:({planning:'gold',gameplay:'mint',ui:'blue',level:'coral',testing:'gold',quality:'violet',audio:'coral',general:'blue'}[member.specialty]||'mint')},slot:member.slot,memberId:member.id,symbol:Array.from(member.name)[0],
-   visitReason:destinations.get(member.id)?.reason,position:positionOf(member),detail:(data.team.departments?.[departmentOf(member)]||'')+' · '+(data.team.positions?.[positionOf(member)]||'')+' / '+base.detail+' 직무: '+member.duties};
+   meetingSeat:seat,visitReason:visit?.reason,position:positionOf(member),detail:(data.team.departments?.[departmentOf(member)]||'')+' · '+(data.team.positions?.[positionOf(member)]||'')+' / '+base.detail+' 직무: '+member.duties};
  });
+ if(visibleMembers.some(m=>destinations.get(m.id)?.reason.includes('임원')))DEPTS.CEO.meetingSeat=[885,310];
  $('stations').replaceChildren();$('staff-selector').replaceChildren();
  for(const member of team.members){const button=element('button',member.name);button.type='button';button.dataset.staff=member.id;button.setAttribute('aria-pressed','false');button.onclick=()=>select(member.id);$('staff-selector').append(button);}
  // Draw back-to-front so furniture and people keep the correct perspective.

@@ -36,6 +36,8 @@ window.OfficeCompany=function({readJSON,onSaved}){
  return {open,apply};
 };
 
+// Shared chair/visitor anchors; unrelated secretary and desk indices never move a seat.
+window.OfficeMeetingSeat=index=>index<8?[815+(index%2)*145,342+Math.floor(index/2)*58]:[130+((index-8)%6)*100,370+Math.floor((index-8)/6)*60];
 window.OfficeScene=function({select,getRoute}){
  const ns='http://www.w3.org/2000/svg',host=document.getElementById('characters'),svg=document.getElementById('office-scene');
  const actors=new Map(),reduce=matchMedia('(prefers-reduced-motion: reduce)');let connected=false,enabled=false,frame=null,last=0,theme=null,decorRoom=null,wanderIndex=0,sceneVisible=true;const metrics={frames:0,transformWrites:0,culled:0,totalFrameMs:0,maxFrameMs:0};window.OfficePerformance=metrics;
@@ -48,7 +50,7 @@ window.OfficeScene=function({select,getRoute}){
   if(Math.abs(actor.x-x)>120&&Math.abs(actor.y-y)>45)actor.path.push([540,400]);
   actor.path.push([x,y]);if(reduce.matches){actor.x=x;actor.y=y;actor.path=[];place(actor);}else start();
  }
- function place(a){const view=svg.viewBox.baseVal,visible=a.x+80>=view.x&&a.x-80<=view.x+view.width&&a.y+50>=view.y&&a.y-160<=view.y+view.height;a.node.dataset.inCamera=String(visible);if(!visible){metrics.culled++;return;}metrics.transformWrites++;a.node.dataset.atDesk=String(Math.hypot(a.x-a.rest[0],a.y-a.rest[1])<45);a.node.setAttribute('transform',`translate(${a.x.toFixed(1)} ${a.y.toFixed(1)}) scale(.78)`);a.node.dataset.moving=String(a.path.length>0);}
+ function place(a){const view=svg.viewBox.baseVal,visible=a.x+80>=view.x&&a.x-80<=view.x+view.width&&a.y+50>=view.y&&a.y-160<=view.y+view.height;a.node.dataset.inCamera=String(visible);if(!visible){metrics.culled++;return;}metrics.transformWrites++;a.node.dataset.atDesk=String(Math.hypot(a.x-a.rest[0],a.y-a.rest[1])<45);a.node.setAttribute('transform',`translate(${a.x.toFixed(1)} ${a.y.toFixed(1)}) scale(${a.home.meetingSeat && window.GameVisuals?.mode()==='illustrated' ? .52 : .78})`);a.node.dataset.moving=String(a.path.length>0);}
  function tick(now){frame=null;if(document.hidden||!sceneVisible||!connected||!enabled||window.OfficeDecorEditing){last=0;return;}if(last&&now-last<32){frame=requestAnimationFrame(tick);return;}const begun=performance.now();metrics.frames++;const dt=Math.min((now-(last||now))/1000,.08);last=now;let moving=false;
   for(const a of actors.values())if(a.path.length){const [x,y]=a.path[0],dx=x-a.x,dy=y-a.y,d=Math.hypot(dx,dy),step=100*dt;if(d<=step||d<1){a.x=x;a.y=y;a.path.shift();}else{a.x+=dx/d*step;a.y+=dy/d*step;}place(a);moving ||=a.path.length>0;}
   // Foot position determines the character overlap order.
@@ -63,7 +65,7 @@ window.OfficeScene=function({select,getRoute}){
   const plate=document.createElementNS(ns,'g');plate.classList.add('character-nameplate');const badge=document.createElementNS(ns,'rect');badge.classList.add('avatar-nameplate');const width=Math.min(152,Math.max(76,Array.from(profile.name).length*9+16));for(const [k,v] of Object.entries({x:-width/2,y:7,width,height:24,rx:6}))badge.setAttribute(k,v);const label=document.createElementNS(ns,'text');label.classList.add('avatar-label');label.setAttribute('y','24');label.textContent=Array.from(profile.name).slice(0,15).join('')+(Array.from(profile.name).length>15?'…':'');plate.append(badge,label);node.append(plate);
   const speech=document.createElementNS(ns,'g');speech.classList.add('character-speech');speech.innerHTML='<rect class="speech-bg" x="-76" y="-132" width="152" height="27" rx="8"/><path d="M-5-105L0-99L5-105" class="speech-bg"/><text class="speech-text" y="-114"></text>';node.append(speech);
   node.onclick=e=>{e.stopPropagation();select(key);};node.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select(key);}};host.append(node);
-  const rest=[home.x+30,home.y+65];const entry=home.visitReason?[75,360]:rest;const a={node,key,x:entry[0],y:entry[1],tx:rest[0],ty:rest[1],home,rest,path:[],state:null,signature:JSON.stringify(profile)+(document.body.dataset.visualMode||'illustrated')};place(a);return a;
+  const rest=home.meetingSeat||[home.x+30,home.y+65];const entry=home.visitReason?[75,360]:rest;const a={node,key,x:entry[0],y:entry[1],tx:entry[0],ty:entry[1],home,rest,path:[],state:null,signature:JSON.stringify(profile)+(document.body.dataset.visualMode||'illustrated')};place(a);return a;
  }
  function decorate(key){if(theme===key&&decorRoom===window.OfficeRoom)return;theme=key;decorRoom=window.OfficeRoom;const d=document.getElementById('theme-decor');
   const colors={corporate:['#aac4d3','#58798b'],creative:['#cdb89e','#8b7562'],garden:['#b4cebd','#678b77']},c=colors[key]||colors.corporate;
@@ -71,7 +73,7 @@ window.OfficeScene=function({select,getRoute}){
   <g><rect x="908" y="160" width="80" height="35" rx="4" fill="#e6eef1" stroke="#9cb3bf" stroke-width="2"/><rect x="924" y="147" width="43" height="22" rx="4" fill="#3d5665"/><rect x="931" y="153" width="12" height="7" fill="#a3d4db"/><path d="M973 163V183" stroke="#809ba9" stroke-width="3"/></g>`;
   if(key==='creative')d.innerHTML+='<rect x="294" y="149" width="280" height="25" rx="5" fill="#f8fbfc" stroke="#a7b7be" stroke-width="2"/><path d="M311 163H389M311 169H353M420 158H550M420 169H496" stroke="#79a4b1" stroke-width="3"/>';
   if(key==='garden')d.innerHTML+='<rect x="294" y="150" width="280" height="32" rx="5" fill="#e1eee3" stroke="#a2bca9" stroke-width="2"/><g fill="#81a68a"><circle cx="320" cy="155" r="15"/><circle cx="360" cy="155" r="17"/><circle cx="402" cy="155" r="14"/><circle cx="448" cy="155" r="17"/><circle cx="491" cy="155" r="15"/><circle cx="540" cy="155" r="18"/></g>';
-  if(decorRoom==='ceo')d.innerHTML+='<path d="M88 390H320M480 390H730" stroke="#99b5c3" stroke-width="5"/><path d="M93 382H315M485 382H725" stroke="#f6fdff" stroke-width="3"/><rect x="97" y="268" width="126" height="27" rx="4" fill="#f4fafc"/><text x="160" y="287" text-anchor="middle" fill="#53717f" font-size="14">EXECUTIVE OFFICE</text><rect x="97" y="450" width="156" height="27" rx="4" fill="#f4fafc"/><text x="175" y="469" text-anchor="middle" fill="#53717f" font-size="14">비서실 · 보고 접수</text>';
+  if(decorRoom==='ceo')d.innerHTML+='<path d="M88 390H320M480 390H730" stroke="#99b5c3" stroke-width="5"/><path d="M93 382H315M485 382H725" stroke="#f6fdff" stroke-width="3"/><rect x="97" y="228" width="126" height="27" rx="4" fill="#f4fafc"/><text x="160" y="247" text-anchor="middle" fill="#53717f" font-size="14">EXECUTIVE OFFICE</text><rect x="97" y="450" width="156" height="27" rx="4" fill="#f4fafc"/><text x="175" y="469" text-anchor="middle" fill="#53717f" font-size="14">비서실 · 보고 접수</text>';
 
 
  }
@@ -80,10 +82,10 @@ window.OfficeScene=function({select,getRoute}){
   const keys=new Set(Object.keys(depts).filter(k=>k!=='DIRECTOR'&&enabled));for(const [key,a] of actors)if(!keys.has(key)){a.node.remove();actors.delete(key);}
   let index=0;for(const key of keys){const d=depts[key],profile=key==='CEO'?owner:{name:d.name,character:d.character||{gender:'male',age:30,color:'mint'}},signature=JSON.stringify(profile)+(document.body.dataset.visualMode||'illustrated');let a=actors.get(key);
    if(!a||a.signature!==signature||a.home.x!==d.x||a.home.y!==d.y){a?.node.remove();a=create(key,profile,d,index);actors.set(key,a);}if(key!=='CEO')index++;
-   const w=getWorker(key),state=!connected?'offline':key==='CEO'?'owner':approval&&d.slot==='HEAD'?'waiting':w.meeting?'meeting':w.busy?'working':'idle';
+   a.home=d;const w=getWorker(key),state=!connected?'offline':key==='CEO'?(d.meetingSeat?'meeting':'owner'):approval&&d.slot==='HEAD'?'waiting':w.meeting?'meeting':w.busy?'working':'idle';
    a.node.dataset.state=state;
    a.node.querySelector('.speech-text').textContent=state==='offline'?'연결 확인':state==='waiting'?'사용자 확인 필요':state==='meeting'?(w.visitReason||'회의 중 · '+w.provider):state==='working'?'업무 중 · '+w.provider:state==='owner'?'대표 · 바닥을 눌러 이동':'업무 대기';
-   if(a.state!==state){if(state==='meeting')target(a,805+(index%2)*155,330+Math.floor(index/2)*75);else if(state==='working')target(a,d.x+42,d.y+24);else if(state==='waiting')target(a,680,350);else if(state==='idle')target(a,...a.rest);a.state=state;}
+   if(a.state!==state){if(state==='meeting')target(a,...(d.meetingSeat||window.OfficeMeetingSeat(index-1)));else if(state==='working')target(a,d.x+42,d.y+24);else if(state==='waiting')target(a,680,350);else if(state==='idle')target(a,...a.rest);a.state=state;}
   }
   for(const a of actors.values())if(a.delivery&&!deliveries.some(d=>d.secretary_id===a.key||d.manager_id===a.key)){a.delivery=false;a.state=null;target(a,...a.rest);}
   for(const delivery of deliveries){
