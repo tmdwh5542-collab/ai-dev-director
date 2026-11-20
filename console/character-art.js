@@ -62,5 +62,14 @@ window.OfficeCharacters=(()=>{
   const art=document.createElementNS(ns,'image');art.setAttribute('href',(window.GameVisuals?.mode()||'illustrated')==='illustrated'?'/crew-portraits-hd.png?v=1':'/crew-portraits.png?v=1');art.setAttribute('width','1983');art.setAttribute('height','793');art.addEventListener('error',()=>{const fallback=vectorPortrait(character);s.replaceChildren(...Array.from(fallback.childNodes));s.dataset.artFallback='vector';},{once:true});cell.append(art);s.append(cell);return s;
  }
  function preview(host,character){const key=JSON.stringify(character)+':'+(window.GameVisuals?.mode()||'illustrated');if(host.dataset.portrait===key&&host.firstElementChild)return;host.replaceChildren(portrait(character));host.dataset.portrait=key;}
- return {avatar,portrait,preview};
+ function presets(host,character,onSelect){
+  host.replaceChildren();host.classList.add('character-style-gallery');
+  for(const [color,look] of Object.entries(window.OfficeCozy.looks)){
+   const profile={...character,color},button=document.createElement('button');button.type='button';button.dataset.look=color;button.setAttribute('aria-pressed',String(color===character.color));button.setAttribute('aria-label',look.name+' 외형 프리셋 선택');
+   const art=document.createElement('span');art.className='style-thumb';art.append(portrait(profile));
+   const cozy=window.GameVisuals?.mode()==='cozy';const pixel=document.createElementNS(ns,'svg');pixel.setAttribute('viewBox','-30 -68 60 76');pixel.classList.add('preset-pixel-preview');pixel.setAttribute('aria-hidden','true');pixel.append(window.OfficeCozy.avatar(profile,true));if(cozy)art.append(pixel);
+   const title=document.createElement('strong');title.textContent=look.name;const detail=document.createElement('small');detail.textContent=cozy?look[profile.gender==='female'?'female':'male']:'현재 그래픽 모드의 외형';button.append(art,title,detail);button.onclick=()=>onSelect(color);host.append(button);
+  }
+ }
+ return {avatar,portrait,preview,presets};
 })();

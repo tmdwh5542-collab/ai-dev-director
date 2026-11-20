@@ -6,10 +6,7 @@ window.OfficeCompany=function({readJSON,onSaved}){
  function character(){return {gender:$('owner-gender').value,age:Number($('owner-age').value),color:$('owner-color').value};}
  function preview(){for(const card of $('office-themes').children){const d=($('visual-mode').value==='illustrated'?artThemes:state.themes)[card.dataset.theme];card.querySelector('strong').textContent=d.name;card.querySelector('small').textContent=d.description;}window.OfficeCharacters.preview($('owner-preview'),character());
   const host=$('character-style-gallery'),key=$('owner-gender').value+':'+$('owner-color').value+':'+$('visual-mode').value;if(host.dataset.character===key)return;host.dataset.character=key;host.replaceChildren();
-  for(const [color,name] of Object.entries({mint:'시티 러너',blue:'나이트 코더',violet:'실버 노트',coral:'레드 라인',gold:'골든 아워'})){
-   const button=document.createElement('button');button.type='button';button.dataset.look=color;button.setAttribute('aria-pressed',String(color===$('owner-color').value));button.setAttribute('aria-label',name+' 스타일 선택');
-   const art=document.createElement('span');art.className='style-thumb';art.append(window.OfficeCharacters.portrait({...character(),color}));const label=document.createElement('span');label.textContent=name;button.append(art,label);button.onclick=()=>{$('owner-color').value=color;$('owner-color').dispatchEvent(new Event('input',{bubbles:true}));};host.append(button);
-  }
+  window.OfficeCharacters.presets(host,character(),color=>{$('owner-color').value=color;$('owner-color').dispatchEvent(new Event('input',{bubbles:true}));});
  }
 
  function selectTheme(key){theme=key;for(const card of $('office-themes').children)card.setAttribute('aria-pressed',String(card.dataset.theme===key));document.getElementById('owner-preview').dataset.theme=key;}

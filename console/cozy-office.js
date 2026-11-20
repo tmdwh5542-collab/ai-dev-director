@@ -2,27 +2,47 @@
 /* Original tile artwork and discrete walking drawings. No external game assets. */
 window.OfficeCozy=(()=>{
  const ns='http://www.w3.org/2000/svg';let roomKey='';
- const colors={mint:['#70a478','#3e645b','#44342e'],blue:['#668bb0','#3e526d','#4b393c'],violet:['#ab82aa','#6b527f','#d6cfbc'],coral:['#d38b76','#96594f','#684539'],gold:['#d4ad61','#936d42','#594331']};
+ // One identity catalogue drives the illustrated portrait and every walking frame.
+ const looks={
+  mint:{name:'시티 러너',coat:'#a2c4ae',shade:'#638b7a',hair:'#365957',light:'#63817b',male:'웨이브 단발 · 초록 눈 · 부드러운 인상',female:'롱 포니테일 · 초록 눈 · 골드 헤어핀'},
+  blue:{name:'나이트 코더',coat:'#4c5d85',shade:'#323e60',hair:'#36364f',light:'#686580',male:'인디고 웨이브 · 가는 눈매 · 사각 안경',female:'인디고 포니테일 · 푸른 눈 · 또렷한 인상'},
+  violet:{name:'실버 노트',coat:'#9a739a',shade:'#624a71',hair:'#c3b6d1',light:'#e7dae7',male:'실버 웨이브 · 보라 눈 · 차분한 인상',female:'실버 웨이브 보브 · 보라 눈 · 부드러운 인상'},
+  coral:{name:'레드 라인',coat:'#db937d',shade:'#a25850',hair:'#9b4e37',light:'#c57a57',male:'오번 웨이브 · 갈색 눈 · 밝은 인상',female:'오번 보브 · 둥근 눈매 · 골드 귀걸이'},
+  gold:{name:'골든 아워',coat:'#514743',shade:'#332e31',hair:'#5a4038',light:'#916d54',male:'브라운 올백 · 깊은 눈매 · 짧은 수염',female:'브라운 보브 · 갈색 눈 · 둥근 안경'}
+ };
+ function appearance(profile={}){const key=Object.hasOwn(looks,profile.color)?profile.color:'mint';return {...looks[key],key,female:profile.gender==='female'};}
  const rect=(x,y,w,h,c)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${c}"/>`;
  function sprite(profile,direction,frame){
-  const [coat,shade,hair0]=colors[profile.color]||colors.mint,hair=Number(profile.age)>=60?'#b9b8a2':hair0,skin='#e8b58b',ink='#473a35',pants='#536377',shoe='#493d37',female=profile.gender==='female',back=direction==='up',side=direction==='left'||direction==='right',step=[0,1,2,0,-1,-2][frame],bob=frame===2||frame===5?-1:0;
+  const look=appearance(profile),{coat,shade}=look,hair=Number(profile.age)>=60?'#b9b8a2':look.hair,skin='#e8b58b',ink='#473a35',pants='#536377',shoe='#493d37',female=profile.gender==='female',back=direction==='up',side=direction==='left'||direction==='right',step=[0,1,2,0,-1,-2][frame],bob=frame===2||frame===5?-1:0;
   let legs='';
   // Side-view strides spread the feet horizontally; front/back strides change leg length.
   if(side){legs=rect(9+step,24,4,6,ink)+rect(9+step,24,3,4,pants)+rect(8+step,29,5,2,shoe)+rect(13-step,24,4,6,ink)+rect(13-step,24,3,4,pants)+rect(12-step,29,5,2,shoe);}
   else{legs=rect(8,24,4,6+step,ink)+rect(9,24,2,4+step,pants)+rect(7,29+step,5,2,shoe)+rect(14,24,4,6-step,ink)+rect(15,24,2,4-step,pants)+rect(14,29-step,5,2,shoe);}
   let head=rect(5,3+bob,16,13,ink)+rect(6,4+bob,14,11,hair)+rect(7,8+bob,12,9,skin);
-  if(back){head=rect(5,3+bob,16,14,ink)+rect(6,4+bob,14,12,hair)+rect(8,5+bob,10,2,'#ffffff22');if(female)head+=rect(7,13+bob,12,7,hair);}
+  if(back){head=rect(5,3+bob,16,14,ink)+rect(6,4+bob,14,12,hair)+rect(8,5+bob,10,2,'#ffffff22');if(female)head+=rect(7,13+bob,12,look.key==='mint'||look.key==='blue'?10:4,hair);}
   else if(side){head+=rect(6,4+bob,14,5,hair)+rect(6,7+bob,5,8,hair)+rect(17,10+bob,2,2,ink)+rect(19,11+bob,2,3,skin)+rect(14,15+bob,4,1,'#bd7d68');}
-  else{head+=rect(6,4+bob,14,5,hair)+rect(6,7+bob,3,5,hair)+rect(9,8+bob,3,2,hair)+rect(11,7+bob,3,2,hair)+rect(9,11+bob,2,2,ink)+rect(16,11+bob,2,2,ink)+rect(12,15+bob,3,1,'#bd7d68');if(female)head+=rect(5,11+bob,2,9,hair)+rect(19,9+bob,2,11,hair);}
+  else{head+=rect(6,4+bob,14,5,hair)+rect(6,7+bob,3,5,hair)+rect(9,8+bob,3,2,hair)+rect(11,7+bob,3,2,hair)+rect(9,11+bob,2,2,ink)+rect(16,11+bob,2,2,ink)+rect(12,15+bob,3,1,'#bd7d68');if(female)head+=rect(5,11+bob,2,look.key==='mint'||look.key==='blue'?9:5,hair)+rect(19,9+bob,2,look.key==='mint'||look.key==='blue'?11:7,hair);}
+  // Distinct silhouettes and accessories remain readable at the office's small scale.
+  head+=rect(8,5+bob,8,1,Number(profile.age)>=60?'#dad8c4':look.light);
+  if(female&&(look.key==='mint'||look.key==='blue')){
+   const sway=frame===2?1:frame===5?-1:0;
+   head=rect((side?3:19)+sway,8+bob,4,14,hair)+rect((side?2:20)+sway,18+bob,4,4,hair)+head;
+   head+=rect(side?5:19,7+bob,3,2,'#e0b568');
+  }
+  if(!back){
+   if((!female&&look.key==='blue')||(female&&look.key==='gold'))head+=side?rect(16,10+bob,5,1,'#37343c')+rect(16,12+bob,4,1,'#37343c'):rect(8,10+bob,5,1,'#37343c')+rect(8,13+bob,5,1,'#37343c')+rect(15,10+bob,5,1,'#37343c')+rect(15,13+bob,5,1,'#37343c')+rect(8,11+bob,1,2,'#37343c')+rect(12,11+bob,4,1,'#37343c')+rect(19,11+bob,1,2,'#37343c');
+   if(!female&&look.key==='gold')head+=rect(side?15:10,14+bob,side?4:8,2,'#92725b');
+   if(female)head+=rect(side?11:6,14+bob,1,2,'#e9c56d');
+  }
   let body=rect(6,17+bob,14,9,ink)+rect(7,18+bob,12,7,coat)+rect(7,23+bob,12,2,shade)+rect(10,17+bob,6,2,back?shade:'#f4e7c9');
   const swing=step>0?1:step<0?-1:0;
   body+=rect(4,18+bob+swing,3,7,shade)+rect(4,23+bob+swing,3,3,skin)+rect(19,18+bob-swing,3,7,shade)+rect(19,23+bob-swing,3,3,skin);
   if(back)body+=rect(10,20+bob,6,1,shade);else body+=rect(12,19+bob,2,5,shade)+rect(16,20+bob,2,1,'#f0dfb4');
   return `<g${direction==='left'?' transform="translate(26 0) scale(-1 1)"':''}>${legs}${body}${head}</g>`;
  }
- function avatar(profile={}){
+ function avatar(profile={},still=false){
   const g=document.createElementNS(ns,'g');g.classList.add('avatar-body','cozy-avatar');g.dataset.direction='down';g.dataset.frame='0';
-  let drawings='';for(const dir of ['down','up','left','right'])for(let f=0;f<6;f++)drawings+=`<g class="cozy-walk-frame" data-direction="${dir}" data-frame="${f}">${sprite(profile,dir,f)}</g>`;
+  let drawings='';for(const dir of (still?['down']:['down','up','left','right']))for(let f=0;f<(still?1:6);f++)drawings+=`<g class="cozy-walk-frame" data-direction="${dir}" data-frame="${f}">${sprite(profile,dir,f)}</g>`;
   g.innerHTML=`<ellipse cx="0" cy="0" rx="19" ry="5" fill="#5d4b36" opacity=".23"/><g transform="translate(-26 -64) scale(2)" shape-rendering="crispEdges">${drawings}</g>`;return g;
  }
  function pose(actor,dx,dy,moving){
@@ -31,22 +51,12 @@ window.OfficeCozy=(()=>{
   const frame=moving?String(Math.floor((actor.distance||0)/7)%6):'0';if(g.dataset.frame!==frame)g.dataset.frame=frame;
  }
  function portrait(profile={}){
-  const [coat,shade,hair0]=colors[profile.color]||colors.mint,hair=Number(profile.age)>=60?'#aaa99b':hair0,female=profile.gender==='female',ink='#4c3935',skin='#ecc09a',shadow='#cf967c';
-  const s=document.createElementNS(ns,'svg');s.classList.add('crew-portrait-svg','cozy-portrait');s.setAttribute('viewBox','0 0 64 64');s.setAttribute('shape-rendering','crispEdges');s.setAttribute('aria-hidden','true');
-  let art=rect(0,0,64,64,'#9b7952')+rect(2,2,60,60,'#f1dfb5')+rect(5,5,54,54,'#c3d3aa')+rect(5,47,54,12,'#98ae86');
-  art+=`<path d="M19 12H23V8H40V10H46V15H49V37H46V48H15V36H13V19H16V14H19Z" fill="${ink}"/>`;
-  if(female)art+=rect(13,21,9,30,hair)+rect(43,20,8,32,hair)+rect(16,25,4,26,shade);
-  art+=`<path d="M21 46H26V42H38V46H44V49H51V53H55V64H9V55H13V51H21Z" fill="${ink}"/>`;
-  art+=rect(14,53,38,11,coat)+rect(11,57,8,7,shade)+rect(46,55,7,9,shade)+rect(24,42,16,8,shadow)+rect(27,44,10,8,skin);
-  art+=`<path d="M23 49H27V51H32V56H27V54H24V52H21V50H23ZM37 49H42V51H39V54H36V57H32V53H36Z" fill="#f7e9c9"/>`+rect(31,54,3,10,shade)+rect(42,56,7,2,'#e5c58f');
-  art+=rect(17,25,4,9,shadow)+rect(44,25,4,9,shadow)+`<path d="M21 16H42V19H45V34H42V39H38V43H27V41H23V37H20V22H21Z" fill="${skin}"/>`;
-  art+=rect(21,29,3,7,shadow)+rect(24,36,4,4,shadow)+rect(28,40,11,2,'#dba68a')+rect(23,22,7,2,'#986a56')+rect(36,22,7,2,'#986a56');
-  art+=rect(23,25,7,4,'#f9eacb')+rect(36,25,7,4,'#f9eacb')+rect(26,25,3,4,'#3f463e')+rect(37,25,3,4,'#3f463e')+rect(26,25,1,1,'#fff6dc')+rect(37,25,1,1,'#fff6dc')+rect(23,24,7,1,ink)+rect(36,24,7,1,ink);
-  art+=rect(31,29,2,5,'#d9a081')+rect(32,33,3,1,'#bb846d')+rect(29,37,8,1,'#b77f6d')+rect(31,38,4,1,'#e5ae93')+rect(23,32,4,1,'#e0a28c')+rect(39,32,4,1,'#e0a28c');
-  art+=`<path d="M18 16H21V11H27V9H39V11H44V15H47V24H43V20H38V17H34V21H30V18H26V23H22V29H18Z" fill="${hair}"/>`+rect(23,13,15,2,'#ffffff22')+rect(21,16,6,2,'#ffffff16')+rect(39,15,4,5,'#ffffff16');
-  if(female)art+=rect(44,21,5,2,coat)+rect(45,32,2,4,'#dabd70');
-  for(let i=0;i<4;i++)art+=rect(17+i*3,60-i%2,2,1,'#ffffff19');
-  s.innerHTML=art;return s;
+  const look=appearance(profile),keys=Object.keys(looks),column=keys.indexOf(look.key),row=look.female?1:0;
+  const s=document.createElementNS(ns,'svg');s.classList.add('crew-portrait-svg','cozy-portrait');s.dataset.preset=look.key;s.setAttribute('viewBox','0 0 240 240');s.setAttribute('aria-hidden','true');
+  // A nested viewport clips all four edges, so adjacent portraits cannot bleed through.
+  const cell=document.createElementNS(ns,'svg');for(const [k,v] of Object.entries({x:0,y:0,width:240,height:240,viewBox:`${column*396.6} ${row*396.5} 396.6 396.5`,preserveAspectRatio:'xMidYMid meet',overflow:'hidden'}))cell.setAttribute(k,v);
+  const art=document.createElementNS(ns,'image');art.setAttribute('href','/crew-portraits-cozy-hd.png?v=1');art.setAttribute('width','1983');art.setAttribute('height','793');
+  art.addEventListener('error',()=>{if(s.dataset.artFallback)return;s.dataset.artFallback='previous-illustration';art.setAttribute('href','/crew-portraits-hd.png?v=1');},{once:true});cell.append(art);s.append(cell);return s;
  }
 
  function plant(x,y){return `<g transform="translate(${x} ${y})">${rect(-13,-12,26,22,'#8c5640')}${rect(-16,-16,32,8,'#c08359')}${rect(-8,-39,16,25,'#427455')}${rect(-21,-34,13,12,'#66985d')}${rect(8,-43,14,15,'#83a969')}${rect(-6,-48,12,12,'#8eb878')}${rect(-7,-6,14,4,'#dfac75')}</g>`;}
@@ -73,5 +83,5 @@ window.OfficeCozy=(()=>{
   host.innerHTML=a;host.setAttribute('shape-rendering','crispEdges');
  }
  function blockers(){return window.GameVisuals?.mode()==='cozy'?[[65,150,193,208],[65,220,120,266],[65,550,230,610],[748,213,1017,228],[748,228,760,348],[748,440,760,558],[1005,224,1017,558],[748,548,1017,558],[842,318,930,512]]:[];}
- return {avatar,portrait,pose,station,item,paint,blockers};
+ return {avatar,portrait,pose,station,item,paint,blockers,looks,appearance};
 })();

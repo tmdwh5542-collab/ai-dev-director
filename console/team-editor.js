@@ -26,8 +26,11 @@ window.OfficeTeamEditor=function({readJSON,onSaved}){
    head.append(remove);row.append(head);
    if(!member.character)member.character={gender:'male',age:30,color:'mint'};
    const character=document.createElement('div');character.className='staff-character-fields';const preview=document.createElement('div');preview.className='staff-avatar-preview';window.OfficeCharacters.preview(preview,member.character);
-   character.append(preview,field('select','성별',member.character.gender,member.character,'gender',{male:'남성',female:'여성'}),field('input','나이',member.character.age,member.character,'age'),field('select','캐릭터 스타일',member.character.color,member.character,'color',{mint:'민트 · 시티 러너',blue:'블루 · 나이트 코더',violet:'바이올렛 · 실버 노트',coral:'코랄 · 레드 라인',gold:'골드 · 골든 아워'}));
-   character.addEventListener('input',()=>window.OfficeCharacters.preview(preview,member.character));row.append(character,field('textarea','담당 직무',member.duties,member,'duties'));list.append(row);
+   character.append(preview,field('select','성별',member.character.gender,member.character,'gender',{male:'남성',female:'여성'}),field('input','나이',member.character.age,member.character,'age'),field('select','외형 프리셋',member.character.color,member.character,'color',{mint:'민트 · 시티 러너',blue:'블루 · 나이트 코더',violet:'바이올렛 · 실버 노트',coral:'코랄 · 레드 라인',gold:'골드 · 골든 아워'}));
+   const presets=document.createElement('details');presets.className='staff-preset-chooser';const summary=document.createElement('summary');summary.textContent='얼굴·헤어·눈 프리셋 고르기';const gallery=document.createElement('div');presets.append(summary,gallery);
+   function refresh(){window.OfficeCharacters.preview(preview,member.character);window.OfficeCharacters.presets(gallery,member.character,color=>{member.character.color=color;character.querySelector('[data-field=color]').value=color;dirty=true;message('');refresh();});}
+   const note=document.createElement('p');note.className='preset-note';note.textContent='성별별 5종 · 얼굴·헤어·눈·의상이 함께 바뀌는 완성형 프리셋입니다. 코지 픽셀 모드에서 대응하는 픽셀 외형을 함께 볼 수 있습니다.';presets.append(note);
+   character.addEventListener('input',refresh);refresh();row.append(character,presets,field('textarea','담당 직무',member.duties,member,'duties'));list.append(row);
   }
   $('team-count').textContent=draft.members.length+' / '+catalogue.max_members+'명 · '+(['HEAD','BUILDER','REVIEWER'].every(slot=>draft.members.some(m=>m.slot===slot))?'개발팀 구성 완료':'기획·구현·검수 담당 채용 필요');$('team-add').disabled=draft.members.length>=catalogue.max_members||saving;
  }

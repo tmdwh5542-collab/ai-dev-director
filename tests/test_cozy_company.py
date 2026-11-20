@@ -23,7 +23,7 @@ def test_old_company_gets_cozy_presentation_without_writing_or_losing_staff(tmp_
 
 def test_cozy_assets_are_available_locally_and_to_paired_devices(http_server):
     from core.device_link import ASSETS
-    for path in ('/cozy-office.js', '/cozy-office.css'):
+    for path in ('/cozy-office.js', '/cozy-office.css', '/crew-portraits-cozy-hd.png'):
         assert path in ASSETS
         status, body = request(http_server, 'GET', path)
         assert status == 200 and body

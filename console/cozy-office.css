@@ -48,7 +48,7 @@ body[data-visual-mode=cozy] .cozy-avatar,body[data-visual-mode=cozy] .cozy-avata
 .cozy-avatar[data-direction=right][data-frame="4"] .cozy-walk-frame[data-direction=right][data-frame="4"]{display:inline}
 .cozy-avatar[data-direction=right][data-frame="5"] .cozy-walk-frame[data-direction=right][data-frame="5"]{display:inline}
 body[data-visual-mode=cozy] .theme-thumbnail{background:repeating-linear-gradient(0deg,#cda36f 0 12px,#b78d5b 12px 14px);border:4px solid #76543c;image-rendering:pixelated}
-body[data-visual-mode=cozy] .cozy-portrait{image-rendering:pixelated;background:#ead7af}
+body[data-visual-mode=cozy] .cozy-portrait{image-rendering:auto;background:linear-gradient(145deg,#f5ead5,#c8d8bb)}
 body[data-visual-mode=cozy] .department-portrait,body[data-visual-mode=cozy] #owner-preview{background:#d6dfb6;border-color:#9b7e50}
 body[data-visual-mode=cozy] .workstation .selection{stroke:#79935b;stroke-width:2;fill:#d5db9e;fill-opacity:.15}
 body[data-visual-mode=cozy] .workstation:not(.selected) .selection{opacity:0}
@@ -58,3 +58,13 @@ body[data-visual-mode=cozy] .workstation .staff-name,body[data-visual-mode=cozy]
 
 body[data-visual-mode=cozy] #staff-routes{display:none}
 body[data-visual-mode=cozy] .room-navigation{color:#654c35}
+
+/* Keep illustrated portraits smooth while the companion map sprites stay crisp. */
+.character-style-gallery .style-thumb{position:relative;display:block;isolation:isolate}
+.character-style-gallery .preset-pixel-preview{position:absolute;right:0;bottom:0;width:34%;height:44%;image-rendering:pixelated;filter:drop-shadow(0 2px 1px #44351c55);background:#f4e9d5d9;border-radius:8px}
+.character-style-gallery button small{display:block;padding:0 7px 7px;box-sizing:border-box;max-width:100%;text-overflow:clip;font-size:11px;line-height:1.5;white-space:normal;overflow-wrap:anywhere;margin-top:5px}
+.character-style-gallery button strong{font-size:12px}
+.staff-preset-chooser{margin:12px 0;padding:12px;border:1px solid #ab9675;border-radius:8px}
+.staff-preset-chooser summary{cursor:pointer;min-height:32px;font-weight:650}
+.preset-note{font-size:12px;line-height:1.6;color:#6d5b46}
+@media(max-width:600px){.character-style-gallery{grid-template-columns:repeat(2,minmax(0,1fr))}.staff-preset-chooser{padding:8px}}
