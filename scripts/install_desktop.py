@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import socket
+import tempfile
 import venv
 
 SOURCE = Path(__file__).resolve().parents[1]
@@ -81,6 +82,7 @@ def copy_installation(source, target):
     # Validate every destination before replacing any source file (including parent symlinks).
     for relative in files:
         safe_path(target, relative)
+    installed_manifest = safe_path(target, MANIFEST)
     target.mkdir(parents=True, exist_ok=True)
     for relative in files:
         destination = safe_path(target, relative)
@@ -90,6 +92,15 @@ def copy_installation(source, target):
             continue
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(safe_path(source, relative), destination)
+    # The manifest describes the managed files and is deliberately not in its own
+    # file list. Record it only after all verified payload files have been copied.
+    with tempfile.NamedTemporaryFile(dir=target, prefix='.install-manifest-', delete=False) as stream:
+        manifest_temp = Path(stream.name)
+        stream.write((source / MANIFEST).read_bytes())
+    try:
+        manifest_temp.replace(installed_manifest)
+    finally:
+        manifest_temp.unlink(missing_ok=True)
     (target / "data").mkdir(exist_ok=True)
     if fresh:
         config_path = target / "companion.json"

@@ -47,6 +47,29 @@ def job(release):
     return folder,record
 
 
+def test_real_installer_output_can_download_and_stage_an_update(release, tmp_path, monkeypatch):
+    from scripts.install_desktop import copy_installation
+    source = tmp_path/'old-release-source'
+    for name in release.old['files']:
+        file = source/name
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(b'default: true' if name == 'config.yaml' else (release.root/name).read_bytes())
+    (source/'desktop_distribution.json').write_text(json.dumps(release.old))
+    installed = tmp_path/'actually-installed'
+    copy_installation(source, installed)
+    shutil.rmtree(source)
+    monkeypatch.setattr(updates, 'ROOT', installed)
+    monkeypatch.setattr(updates, 'data_root', lambda: installed/'data')
+    assert updates.current_version() == release.old['version']
+    assert updates.public()['installed'] is True
+    (installed/'data/update_settings.json').write_text(json.dumps({'repository':REPO,'public_key':release.public,'auto_check':False,'auto_download':False}))
+    updates.update_state(status='AVAILABLE', envelope=release.envelope)
+    monkeypatch.setattr(updates,'open_download',lambda *a,**kw:io.BytesIO(release.archive.read_bytes()))
+    updates.download(background=False)
+    assert updates.state()['status'] == 'READY', updates.public()
+    assert not updates.state()['plan']['manual_required']
+
+
 def test_signature_repository_version_hash_and_protocol_are_checked(release):
     payload=p.verify_envelope(release.envelope,release.public,REPO)
     assert p.inspect_archive(release.archive,payload)['version']=='2026.11.20.2'

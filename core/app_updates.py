@@ -120,9 +120,10 @@ def download(background=True):
                     update_state(received_bytes=size)
             part.replace(archive);manifest=protocol.inspect_archive(archive,payload)
             old=read(ROOT/'desktop_distribution.json',{})
-            plan=protocol.plan(ROOT,old,manifest) if old else {'manual_required':True,'manual_files':['최초 전체 설치 필요'],'changed':[],'removed':[]}
+            plan=protocol.plan(ROOT,old,manifest) if old else {'manual_required':True,'manual_files':['설치 목록 desktop_distribution.json 없음'],'changed':[],'removed':[]}
             manual=plan['manual_required'] or payload['min_updater']>protocol.PROTOCOL
-            update_state(status='INSTALLER_REQUIRED' if manual else 'READY',message='실행 파일·의존성 변경 또는 최초 설치: 전체 설치가 필요합니다.' if manual else '서명·파일 검증 완료. 작업을 마친 뒤 적용하세요.',archive_path=str(archive),plan=plan)
+            message=('설치 목록(desktop_distribution.json)이 없어 현재 설치 파일을 안전하게 비교할 수 없습니다. 다운로드를 반복해도 자동 적용되지 않습니다. 최신 전체 설치 ZIP을 압축 해제해 INSTALL_DESKTOP.cmd로 한 번 재설치하세요. 기존 설치 폴더는 지우지 마세요.' if not old else '실행 파일·의존성 변경 또는 업데이트 형식 변경: 전체 설치가 필요합니다.' if manual else '서명·파일 검증 완료. 작업을 마친 뒤 적용하세요.')
+            update_state(status='INSTALLER_REQUIRED' if manual else 'READY',message=message,archive_path=str(archive),plan=plan)
         except Exception as exc:
             part.unlink(missing_ok=True);update_state(status='ERROR',message=str(exc)[:1000],archive_path=None)
         finally:

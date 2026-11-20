@@ -163,11 +163,18 @@ def test_installer_preserves_settings_data_and_runs(tmp_path):
     source = distribution(tmp_path / "unpacked")
     target = tmp_path / "installed"
     copy_installation(source, target)
+    assert (target / 'desktop_distribution.json').read_bytes() == (source / 'desktop_distribution.json').read_bytes()
     port = launch.configured_port(target)
     (target / "config.yaml").write_text("my: settings")
     (target / "data" / "my-state.json").write_text("history")
     (target / "runs").mkdir(); (target / "runs" / "result.json").write_text("result")
+    # Reproduce a pre-fix installed app: payload and history exist, manifest is absent.
+    (target / 'desktop_distribution.json').unlink()
+    updated = json.loads((source / 'desktop_distribution.json').read_text())
+    updated['version'] = '2026.11.20.5'
+    (source / 'desktop_distribution.json').write_text(json.dumps(updated))
     copy_installation(source, target)
+    assert json.loads((target / 'desktop_distribution.json').read_text())['version'] == '2026.11.20.5'
     assert launch.configured_port(target) == port
     assert (target / "config.yaml").read_text() == "my: settings"
     assert (target / "data" / "my-state.json").read_text() == "history"
