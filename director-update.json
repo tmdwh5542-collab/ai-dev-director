@@ -1,0 +1,14 @@
+{
+  "payload": {
+    "app": "ai-dev-director",
+    "format": 1,
+    "repository": "tmdwh5542-collab/ai-dev-director",
+    "version": "2026.11.20.1",
+    "min_updater": 1,
+    "archive_url": "https://github.com/tmdwh5542-collab/ai-dev-director/releases/download/v2026.11.20.1/AI-DEV-DIRECTOR-Windows-2026.11.20.1.zip",
+    "archive_sha256": "e900120719cf1adc2b2136fc1ccec852b19ead890966975c4f0e3d137f09a3b6",
+    "archive_bytes": 27133312,
+    "release_notes": "# AI DEV DIRECTOR 2026.11.20.1\n\n게임 개발용 AI 회사 화면과 프로젝트 도구를 포함한 Windows 데스크톱 소스 설치판입니다.\n\n- 대표·직원 캐릭터, 부서별 사무실, 회의·비서 보고, 확대/축소와 가구 배치를 제공합니다.\n- Codex·Claude Code 등 AI CLI 연결 점검, 직원별 도구 권한, 선택형 Hermes 연결 설정을 제공합니다. AI CLI 로그인·구독·선택형 API 설정은 별도입니다.\n- 웹 작업실에서 프롬프트 대화와 미리보기, 개발 서버·검수·체크포인트를 사용합니다.\n- 프로젝트 작업 규칙과 실행 근거 확인, 예약 업무, 운영 기록 백업·기기 연결 설정을 포함합니다.\n- 서명된 GitHub Release 자동 확인·선택형 다운로드·사용자 지정 적용을 추가했습니다. 업데이트 전에 백업하고 시작 검사 실패 시 이전 코드와 적용 직전 데이터를 복구합니다.\n\n## 설치\n\n1. `AI-DEV-DIRECTOR-Windows-2026.11.20.1.zip` 전체를 압축 해제합니다.\n2. 기존 앱의 시스템 중지를 누르고 앱 창을 닫습니다. 기존 설치 폴더는 지우지 않습니다.\n3. `AI DEV DIRECTOR/INSTALL_DESKTOP.cmd`를 실행합니다.\n\nWindows 10/11 64비트, Python 3.10 이상 64비트, Git과 첫 설치용 인터넷이 필요합니다. 미리 빌드한 EXE 대신 설치 과정에서 Qt 전용 앱을 만듭니다. 설정과 운영 기록은 보존합니다. 설치 후 업데이트 채널은 처음 한 번 자동 등록하고 기존 신뢰 설정은 덮어쓰지 않습니다.\n\n기존 설치본에서 이번 업데이트 기능을 받으려면 전체 설치가 한 번 필요합니다. 이후 코드·화면·자산 업데이트를 앱에서 받을 수 있습니다. 전용 실행 파일·런처·Python 의존성이 바뀌면 전체 설치가 필요하다고 표시합니다.\n\n## 검증 범위\n\nLinux 환경의 자동 검사, 실제 로컬 서버 시작 검사, 브라우저 화면과 Qt 앱 창 검사를 수행했습니다. 실제 Windows 설치·업데이트 전체 흐름, 사용자 AI 계정 로그인·유료 API 호출·운영 사이트 작업은 미검증입니다. 태블릿·휴대폰은 실행 중인 호스트 PC에 연결하는 방식이며 PC가 꺼진 동안 대신 실행하지 않습니다.\n\n`director-update.json`은 앱 업데이트용 Ed25519 서명 메타데이터입니다. `update-public-key.txt`는 공개키이며, 서명 개인키·사용자 데이터·인증 파일은 배포하지 않습니다. 이 서명은 Windows Authenticode 서명과 별개입니다.\n"
+  },
+  "signature": "W2kxLwsydtOrE+l40uZF8RWgG1m7xC3QPDJSRP8xQt6H5h9Vpk5fDES6WbZ3GEGbe8JXl/3KUCcDvQqf7HOUDQ=="
+}
