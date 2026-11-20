@@ -14,6 +14,7 @@ def http_server():
     server.bridge = SimpleNamespace(submit=lambda p: {'status': 'submitted'}, list=lambda: [])
     thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
     yield server
+    if hasattr(server,'device_link'):server.device_link.close(revoke=False,persist=False)
     server.shutdown(); server.server_close(); thread.join(timeout=2)
 
 
@@ -52,3 +53,11 @@ def test_console_static_served(http_server):
     code, body = request(http_server, 'GET', '/')
     assert code == 200 and 'AI DEV 작업실'.encode() in body
     assert request(http_server, 'GET', '/console.js')[0] == 200
+
+
+@pytest.mark.parametrize('path', ['/office','/office.js','/office.css','/character-art.js','/pixel-theme.css','/crew-portraits.png'])
+def test_office_allowlist_and_origin_boundary(http_server,path):
+    code,body=request(http_server,'GET',path)
+    assert code==200 and body
+    assert request(http_server,'GET',path,headers={'Origin':'https://evil.example'})[0]==403
+    assert request(http_server,'GET','/office/../../config.yaml')[0]==404

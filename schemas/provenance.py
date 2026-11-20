@@ -10,11 +10,12 @@ class AgentProvenanceRecord(BaseModel):
     invocation_command: str = Field(..., description="Exact invocation mode or CLI command called")
     version: str = Field(..., description="CLI executable version")
     exit_code: Optional[int] = Field(default=None, description="Observed process exit code; None when no process ran")
+    http_status: Optional[int] = Field(default=None, description="Observed HTTP status for an explicitly configured API call; None for CLI")
     duration_sec: Optional[float] = Field(default=None, description="Execution duration in seconds (observed)")
     # --- declared policy values (NOT measured at runtime) ---
-    authentication_mode: str = Field(default="subscription", description="DECLARED: official CLI signed-in subscription session is the only permitted auth mode")
-    api_key_policy: str = Field(default="disabled", description="DECLARED: API keys are stripped from the CLI environment (get_sanitized_env)")
-    api_key_used: bool = Field(default=False, description="DECLARED by policy: no API key is ever passed to a CLI")
+    authentication_mode: str = Field(default="subscription", description="DECLARED: subscription CLI session or explicitly registered API-key connection")
+    api_key_policy: str = Field(default="disabled", description="DECLARED: keys stripped from CLI environment; explicit_opt_in for registered HTTPS API")
+    api_key_used: bool = Field(default=False, description="DECLARED: whether this invocation used a registered HTTPS API key; never passed to CLI")
     observed_fields: List[str] = Field(default_factory=lambda: ["executable", "version", "exit_code", "duration_sec", "invocation_command"],
                                        description="Fields measured from the actual process execution")
     declared_fields: List[str] = Field(default_factory=lambda: ["authentication_mode", "api_key_policy", "api_key_used"],

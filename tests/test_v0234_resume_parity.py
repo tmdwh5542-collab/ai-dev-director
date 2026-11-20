@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 import psutil
+from tests.process_status import process_is_executing
 
 import dashboard_server
 from dashboard_server import handle_chat_message, GLOBAL_SESSION_ID
@@ -417,9 +418,9 @@ def _hanging_cli(tmp_path, name):
 
 def _wait_dead(pid, timeout=5.0):
     deadline = time.time() + timeout
-    while psutil.pid_exists(pid) and time.time() < deadline:
+    while process_is_executing(pid) and time.time() < deadline:
         time.sleep(0.05)
-    return not psutil.pid_exists(pid)
+    return not process_is_executing(pid)
 
 
 def test_n_version_probe_kills_parent_and_child(tmp_path):

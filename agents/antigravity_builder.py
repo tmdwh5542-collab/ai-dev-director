@@ -4,6 +4,7 @@ import json
 import time
 import shutil
 import subprocess
+from core.subprocess_options import hidden_console
 import logging
 import re
 from pathlib import Path, PurePosixPath
@@ -229,7 +230,7 @@ class AntigravityBuilder:
         agents_dir.mkdir(exist_ok=True)
 
         guard_script = agents_dir / "permission_guard.py"
-        guard_code = f"""import sys, json, re
+        guard_code = f"""import sys, json, re, ntpath
 from pathlib import Path
 
 try:
@@ -242,10 +243,13 @@ try:
     if name in ("write_to_file", "replace_file_content", "write_file", "edit_file"):
         import os
         target = args.get("TargetFile") or args.get("file_path") or args.get("path") or ""
-        root = os.path.realpath(r"{wt_native}")
+        root = os.path.realpath({wt_native!r})
         raw = str(target)
         if not raw or raw.startswith("~") or raw.startswith(chr(92) * 2) or raw.startswith("//"):
             print(json.dumps({{"decision": "deny", "reason": "Scoped permission DENY: invalid target path"}}))
+            sys.exit(0)
+        if ntpath.isabs(raw) and not os.path.isabs(raw):
+            print(json.dumps({{"decision": "deny", "reason": "Scoped permission DENY: write outside allowed worktree (foreign absolute path)"}}))
             sys.exit(0)
         cand = raw if os.path.isabs(raw) else os.path.join(root, raw)
         real = os.path.realpath(cand)
@@ -253,14 +257,28 @@ try:
             inside = os.path.commonpath([root, real]) == root
         except ValueError:
             inside = False
-        rel_parts = [p.lower() for p in os.path.relpath(real, root).replace(os.sep, "/").split("/")] if inside else []
+        rel_parts = os.path.relpath(real, root).replace(os.sep, "/").split("/") if inside else []
+        if os.name == "nt": rel_parts = [p.lower() for p in rel_parts]
         if not inside:
             print(json.dumps({{"decision": "deny", "reason": "Scoped permission DENY: write outside allowed worktree (canonical containment)"}}))
             sys.exit(0)
         control_dirs = {control_dirs!r}
         control_files = {control_files!r}
-        if any(p in control_dirs for p in rel_parts) or (len(rel_parts) == 1 and rel_parts[0] in control_files):
+        if any(p.lower() in control_dirs for p in rel_parts) or (len(rel_parts) == 1 and rel_parts[0].lower() in control_files):
             print(json.dumps({{"decision": "deny", "reason": "Scoped permission DENY: Director control-plane path is never writable"}}))
+            sys.exit(0)
+
+        relative = "/".join(rel_parts)
+        grants = {allowed_permission_paths!r}
+        denials = {protected_permission_paths!r}
+        if os.name == "nt":
+            grants = [p.lower() for p in grants]
+            denials = [p.lower() for p in denials]
+        def covers(rule):
+            rule = rule.replace(chr(92), "/").rstrip("/")
+            return relative == rule or relative.startswith(rule + "/")
+        if any(covers(rule) for rule in denials) or not any(covers(rule) for rule in grants):
+            print(json.dumps({{"decision": "deny", "reason": "Scoped permission DENY: target is protected or outside allowed_paths"}}))
             sys.exit(0)
 
     # Check shell execution tools
@@ -369,6 +387,8 @@ except Exception as e:
         """
         Executes Antigravity CLI subprocess inside the RUN Git worktree with scoped permissions.
         """
+        from core import staffing
+        staffing.activate(order, 'BUILDER')
         wt = Path(worktree_path).resolve()
         start_time = time.time()
 
@@ -571,6 +591,7 @@ except Exception as e:
 
         prompt_text = (
             f"GOAL: {order.goal}\n\n"
+            f"STAFF FOCUS: {staffing.guidance(order, 'BUILDER')}\n"
             f"ORDER CONTEXT (does not expand allowed paths or permissions): {order.context or ''}\n\n"
             f"ALLOWED PATHS: {json.dumps(order.allowed_paths)}\n"
             f"PROTECTED PATHS: {json.dumps(order.protected_paths)}\n"
@@ -755,7 +776,8 @@ except Exception as e:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                encoding="utf-8"
+                encoding="utf-8",
+                **hidden_console()
             )
             if diff_res.returncode != 0:
                 return BuilderResultSchema(

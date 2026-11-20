@@ -2,6 +2,7 @@ import os
 import sys
 import shlex
 import shutil
+import tempfile
 from pathlib import Path
 from typing import Dict, Any, Optional, Union, List
 from core.git_manager import GitManager
@@ -48,13 +49,19 @@ class Verifier:
                 if resolved:
                     argv[0] = resolved
 
-            res: ProcessResult = ProcessTreeRunner.run(
-                argv=argv,
-                cwd=cwd_str,
-                env=env,
-                timeout=timeout,
-                no_output_timeout=None
-            )
+            # A worktree snapshot can carry timestamp-based .pyc files. A same-size edit in the
+            # same second can then verify the OLD code, yielding either a false PASS or FAIL.
+            # Redirect Python's cache to a fresh command-local directory instead of deleting
+            # files in the user's worktree. Non-Python tools simply ignore this variable.
+            with tempfile.TemporaryDirectory(prefix="director-verify-pycache-") as pycache:
+                env["PYTHONPYCACHEPREFIX"] = pycache
+                res: ProcessResult = ProcessTreeRunner.run(
+                    argv=argv,
+                    cwd=cwd_str,
+                    env=env,
+                    timeout=timeout,
+                    no_output_timeout=None
+                )
 
             if res.timed_out:
                 return {

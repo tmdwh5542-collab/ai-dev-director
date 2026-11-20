@@ -90,6 +90,10 @@ class TriadResearchRunner:
 
     def _invoke_once(self, domain: str, prompt: str, cwd: str, stage: str) -> Dict[str, Any]:
         normalized = str(domain).upper()
+        from core.ai_connections import api_route, invoke_api
+        if api_route(normalized):
+            try: return invoke_api(normalized, prompt, timeout=self.timeout)
+            except Exception as exc: raise ResearchProviderCallError(str(exc),retryable=False) from None
         executable = self.executables.get(normalized)
         meta: Dict[str, Any] = {"executable": executable}
         if not executable or not Path(executable).exists():
@@ -246,3 +250,13 @@ def cleanup_research_workspaces(project_path: str, workspaces: Dict[str, str]) -
         run_capture(["git", "worktree", "remove", "--force", str(path)], cwd=project, timeout=60)
         shutil.rmtree(path, ignore_errors=True)
     run_capture(["git", "worktree", "prune"], cwd=project, timeout=30)
+
+
+class EvidenceOnlyRunner(TriadResearchRunner):
+    """JSON proposal/role transport: evidence supplied in prompt, Claude tools explicitly disabled."""
+    def _command(self, domain, executable, prompt):
+        argv, stdin, label = super()._command(domain, executable, prompt)
+        if domain == 'ANTHROPIC':
+            argv += ['--tools', '']
+            label += ' --tools ""'
+        return argv, stdin, label

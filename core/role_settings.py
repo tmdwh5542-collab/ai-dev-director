@@ -24,7 +24,8 @@ def apply(config):
             config.setdefault(role, {}).update(provider=provider, executable=None, model='cli-default')
         config['builder']['mode'] = 'proposal'
         config['manual_roles'] = True
-    return config
+    from core.ai_connections import apply as apply_connections
+    return apply_connections(config)
 
 def current(config):
     return {role: ALIASES[config[role]['provider'].lower()] for role in ('head', 'builder', 'reviewer')}

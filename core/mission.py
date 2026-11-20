@@ -122,13 +122,23 @@ class MissionRunner:
     # ------------------------------------------------------------------ lifecycle
     def create(self, project_path: str, goal: str, first_order: OrderSchema, config: Optional[dict] = None,
                notes: Optional[List[str]] = None, base_worktree: Optional[str] = None, profile: Optional[str] = None,
-               source: str = "chat", request_id: Optional[str] = None, auto_apply: Optional[str] = None) -> Dict[str, Any]:
+               source: str = "chat", request_id: Optional[str] = None, auto_apply: Optional[str] = None,
+               workflow_snapshot: Optional[dict] = None) -> Dict[str, Any]:
+        from core import workflows, staffing
+        team = staffing.validate(first_order.staff_team) if first_order.staff_team else staffing.current()
+        first_order = staffing.bind_order(first_order, team, project=project_path)
+        tagged, plain_goal, tagged_memory = workflows.split_request_tags(autopilot.split_profile_tag(goal)[1])
+        workflow_id = (workflow_snapshot or {}).get("workflow_id") or workflows.order_workflow(first_order)
+        if not workflow_id and tagged:
+            workflow_id = workflows.resolve_workflow(tagged, plain_goal)
+        if workflow_id:
+            first_order = workflows.apply_workflow(first_order, workflow_id)
         if base_worktree is None and autopilot.setting(config, "continue_from_last_deliverable", True):
             base_worktree = latest_deliverable(project_path, self.store)
         knobs = autopilot.profile_overrides(config, profile)
         mission = {
             "mission_id": "MSN-" + datetime.now().strftime("%y%m%d%H%M%S") + "-" + uuid.uuid4().hex[:8].upper(),
-            "project_path": str(project_path), "goal": goal, "status": "RUNNING",
+            "project_path": str(project_path), "goal": goal, "status": "RUNNING", "staff_team": team,
             "created_at": _now(), "updated_at": _now(),
             "max_steps": int(knobs.get("max_steps", autopilot.setting(config, "max_steps", 6))),
             "max_consecutive_failures": int(knobs.get("max_consecutive_failures", autopilot.setting(config, "max_consecutive_failures", 3))),
@@ -140,6 +150,10 @@ class MissionRunner:
             "steps": [{"index": 1, "order": first_order.model_dump(), "entry_notes": list(notes or []),
                        "run_id": None, "result": None}],
         }
+        if workflow_id:
+            mission.update(workflow_id=workflow_id,
+                           use_project_memory=(workflow_snapshot or {}).get("use_project_memory", tagged_memory),
+                           memory_sources=list((workflow_snapshot or {}).get("memory_sources", []))[:3])
         self.store.save(mission)
         return mission
 
@@ -180,6 +194,7 @@ class MissionRunner:
         step = mission["steps"][-1]
         total = mission["max_steps"]
         orch = self.factory()
+        orch.config['_staff_team'] = mission.get('staff_team')
         knobs = autopilot.profile_overrides(orch.config, mission.get("profile"))
         if knobs:                                              # the profile's budgets apply to every run of this mission
             orch.config.setdefault("autonomy", {}).update({k: v for k, v in knobs.items() if k != "max_steps"})
@@ -194,6 +209,8 @@ class MissionRunner:
             self.notify(f"[미션 {step['index']}/{total}] 결과 {r['final_state']} - "
                         f"{self._one_line(r)}", run_id=step["run_id"])
         result = step["result"]
+        if (result.get("development_rules") or {}).get("block_code")=="RUNTIME_NOT_CONFIGURED":
+            return self._finish(mission,"BLOCKED",blocked="실행 검증 설정 필요: 프로젝트 작업 규칙에서 실제 동작 확인 명령과 범위를 지정하세요. 대표 승인 요청이 아닙니다.")
         if result["final_state"] == State.PASS:
             mission["base_worktree"] = result.get("worktree_path") or mission.get("base_worktree")
         elif result["final_state"] not in (State.FAIL, State.TIMEOUT):
@@ -231,6 +248,10 @@ class MissionRunner:
 
         plan = self._plan(orch, mission)
         status = str(plan.get("status", "")).upper()
+        if status == 'DONE':
+            from core.development_rules import mission_completion
+            check=mission_completion(mission)
+            if not check['passed']:return self._finish(mission,'BLOCKED',blocked=check['reason'])
         if status == "DONE":
             return self._finish(mission, "DONE", summary=plan.get("summary") or plan.get("reason", ""))
         if status == "BLOCKED":
@@ -283,6 +304,10 @@ class MissionRunner:
 
     def _execute(self, orch, mission: Dict[str, Any], step: Dict[str, Any]) -> None:
         order = OrderSchema(**step["order"])
+        if mission.get("workflow_id"):
+            from core.workflows import apply_workflow
+            order = apply_workflow(order, mission["workflow_id"])
+            step["order"] = order.model_dump()
         project = mission["project_path"]
         rid = step.get("run_id")
         row = orch.sm.get_run(rid) if rid else None
@@ -322,12 +347,24 @@ class MissionRunner:
     def _plan(self, orch, mission: Dict[str, Any]) -> Dict[str, Any]:
         history = [{"step": s["index"], "goal": s["order"].get("goal"),
                     "acceptance_criteria": s["order"].get("acceptance_criteria"),
+                    "assigned_staff_id":s["order"].get("assigned_staff_id"), "assigned_reviewer_id":s["order"].get("assigned_reviewer_id"),
                     "result": s.get("result")} for s in mission["steps"]]
         where = mission.get("base_worktree") or mission["project_path"]
         try:
             context = orch._read_project_context(where)
         except Exception:
             context = {"project_path": where}
+        if mission.get("workflow_id"):
+            from core import workflows
+            context = workflows.enrich_context(context, mission["project_path"], mission["workflow_id"],
+                                               mission.get("use_project_memory", True), store=self.store)
+            mission["planning_memory_sources"] = workflows.snapshot(context)["memory_sources"]
+        from core.company_meetings import project_decisions
+        from core.development_rules import instruction as development_instruction
+        context['development_rules']=development_instruction(mission['project_path'])
+        context['company_decisions'] = project_decisions(mission['project_path'])
+        context['company_decision_rule'] = 'Recommendations for the existing goal only; do not expand scope, permissions, budgets or installation rights.'
+        context['staff_workload'] = [{'staff_id':m['id'],'assigned_steps':sum(s['order'].get('assigned_staff_id')==m['id'] or s['order'].get('assigned_reviewer_id')==m['id'] for s in mission['steps'])} for m in (mission.get('staff_team') or {}).get('members',[])]
         last_run = mission["steps"][-1].get("run_id") or mission["mission_id"]
         from core import usage
         usage.set_context(stage="MISSION_PLANNING", run_id=None)
@@ -338,7 +375,16 @@ class MissionRunner:
                 plan = orch.head.plan_next(mission["goal"], history, context, cwd=where) or {}
                 status = str(plan.get("status", "")).upper()
                 if status == "CONTINUE":
-                    problems = autopilot.order_conflicts(OrderSchema(**(plan.get("order") or {})))
+                    proposed = OrderSchema(**(plan.get("order") or {}))
+                    if mission.get('staff_team'):
+                        from core import staffing
+                        proposed = staffing.bind_order(proposed, mission['staff_team'], history=mission['steps'], project=mission['project_path'])
+                    if mission.get("workflow_id"):
+                        from core.workflows import apply_workflow
+                        proposed = apply_workflow(proposed, mission["workflow_id"])
+                        plan["order"] = proposed.model_dump()
+                    plan["order"] = proposed.model_dump()
+                    problems = autopilot.order_conflicts(proposed)
                     if not problems:
                         return plan
                     # HEAD's own ORDER contradicts itself (e.g. "create data/x.json" while protecting data/*.json):
@@ -372,6 +418,7 @@ class MissionRunner:
         return {
             "run_id": run_id, "final_state": row.get("current_state"), "worktree_path": row.get("worktree_path"),
             "stop_detail": ((trans[-1].get("details") if trans else "") or "")[:1500],
+            "development_rules": orch._load_json(run_id,"development_rules.json"),
             "tests": ver.get("test_counts"), "verification": (ver.get("summary") or "")[:600],
             "review_verdict": rev.get("verdict"),
             "review_findings": (list(rev.get("p0") or []) + list(rev.get("p1") or []) + list(rev.get("p2") or []))[:10],
@@ -403,6 +450,7 @@ class MissionRunner:
         where = mission.get("base_worktree") or "(아직 통과한 단계 없음)"
         head_line = {"DONE": "미션 완료", "BLOCKED": "미션 보류 - 사용자 결정 필요",
                      "INCOMPLETE": "미션 중단 - 단계 예산 소진 또는 계획 불가", "FAILED": "미션 실패"}[status]
+        if status=="BLOCKED" and "실행 검증" in (blocked or ""):head_line="미션 보류 - 실행 검증 준비 필요"
         text = (f"{head_line} ({passed}/{len(mission['steps'])} 단계 통과)\n"
                 f"목표: {mission['goal'][:300]}\n{mission['summary'][:1500]}\n결과물 위치(작업본): {where}")
         if blocked:

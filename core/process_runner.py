@@ -1,9 +1,11 @@
 import os
+import ntpath
 import sys
 import time
 import logging
 import threading
 import subprocess
+from core.subprocess_options import hidden_console
 from typing import List, Optional, Dict, Tuple, Callable
 import psutil
 
@@ -94,7 +96,8 @@ class ProcessTreeRunner:
                     stderr=subprocess.PIPE,
                     text=True,
                     shell=False,
-                    timeout=5
+                    timeout=5,
+                    **hidden_console()
                 )
             except Exception as e:
                 logger.warning(f"taskkill failed on PID {pid}: {e}")
@@ -113,7 +116,12 @@ class ProcessTreeRunner:
             pass
 
         time.sleep(0.1)
-        return not psutil.pid_exists(pid)
+        try:
+            return psutil.Process(pid).status() in (psutil.STATUS_ZOMBIE, psutil.STATUS_DEAD)
+        except psutil.NoSuchProcess:
+            return True
+        except psutil.AccessDenied:
+            return False
 
     @classmethod
     def run(
@@ -179,7 +187,7 @@ class ProcessTreeRunner:
         # test explicitly opted in (integration_cli marker sets DIRECTOR_ALLOW_REAL_CLI=1). This prevents mock tests
         # from consuming real quota or hanging for the full CLI timeout.
         if os.environ.get("DIRECTOR_TESTING") == "1" and os.environ.get("DIRECTOR_ALLOW_REAL_CLI") != "1":
-            base = os.path.basename(str(argv[0])).lower() if argv else ""
+            base = ntpath.basename(str(argv[0])).lower() if argv else ""
             if base in REAL_CLI_BASENAMES:
                 cls.blocked_real_cli_calls.append(list(argv))
                 raise RealCliCallDuringUnitTest(
@@ -206,7 +214,8 @@ class ProcessTreeRunner:
             stderr=subprocess.PIPE,
             text=True,
             encoding="utf-8",
-            errors="replace"
+            errors="replace",
+            **hidden_console()
         )
         pid = process.pid
         with _ACTIVE_LOCK:

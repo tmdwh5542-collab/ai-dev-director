@@ -1,6 +1,10 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.venv/
+node_modules/
+artifacts/
+dist/
 
 # runtime state is never source
 data/*
@@ -16,3 +20,18 @@ companion.local.json
 *.token
 *.db
 *.sqlite3
+.env
+.env.*
+*.key
+*.pem
+*.pfx
+credentials/
+secrets/
+
+# Native GUI build output
+/native/
+/build/
+*.spec
+
+# Optional pinned web tool dependencies (installed by scripts/setup_web_tools.py)
+/tools/web/node_modules/

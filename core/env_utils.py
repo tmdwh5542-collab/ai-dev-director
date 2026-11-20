@@ -1,4 +1,5 @@
 import os
+from core.subprocess_options import hidden_console
 import shutil
 from pathlib import Path
 from typing import Dict, Optional
@@ -117,6 +118,7 @@ def run_capture(argv, cwd=None, timeout=None, env=None):
         shell=False,
         timeout=timeout,
         env=env,
+        **hidden_console(),
     )
 
 

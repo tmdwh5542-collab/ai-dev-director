@@ -1,0 +1,29 @@
+/* Actual local HTTP + DOM regression: no live AI, source/history confined to a temporary directory. */
+const {chromium}=require('playwright'),{spawn}=require('node:child_process'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),assert=require('node:assert/strict');
+const root=path.resolve(__dirname,'../..'),temp=fs.mkdtempSync(path.join(os.tmpdir(),'director-office-perf-'));
+const child=spawn(process.env.DIRECTOR_UI_PYTHON||'python',[path.join(__dirname,'server.py'),temp],{cwd:root,env:{...process.env,DIRECTOR_UI_LEGACY_COMPANY:'1'},stdio:['ignore','pipe','pipe']});let browser,stderr='';child.stderr.on('data',b=>stderr+=b);
+(async()=>{try{
+ const port=await new Promise((resolve,reject)=>{let out='';const timer=setTimeout(()=>reject(Error(stderr||'startup timeout')),20000);child.stdout.on('data',b=>{out+=b;const m=out.match(/^(\d+)$/m);if(m){clearTimeout(timer);resolve(m[1]);}});child.once('exit',()=>reject(Error(stderr)));});const base='http://127.0.0.1:'+port;
+ browser=await chromium.launch({headless:true,executablePath:process.env.DIRECTOR_UI_CHROMIUM||'/usr/bin/chromium',args:['--no-sandbox','--disable-gpu']});const page=await browser.newPage({viewport:{width:1400,height:1000},reducedMotion:'reduce'}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const project=(await(await page.request.get(base+'/status')).json()).project_path;
+ const agenda={id:'MTG-PERF-1',meeting_id:'MTG-PERF',project_path:project,department:'development',title:'검증 근거 확인',reason:'실제 데이터로 상태 유지 검증',action:'테스트 결과 확인',category:'test_coverage',impact_flags:[],review_reason:'확인 필요',status:'PENDING'};
+ const journal={meetings:[],agendas:[agenda]},journalPath=path.join(temp,'company_meetings.json');fs.writeFileSync(journalPath,JSON.stringify(journal));let offline=true,officeRequests=0,meetingRequests=0;
+ page.on('request',r=>{if(new URL(r.url()).pathname==='/ops/meetings'&&r.method()==='GET')meetingRequests++;});
+ await page.route('**/ops/office?*',async route=>{officeRequests++;return offline?route.fulfill({status:503,json:{error:'fixture offline'}}):route.continue();});
+ await page.goto(base+'/office');await page.waitForFunction(()=>!document.getElementById('office-error').hidden);await page.waitForTimeout(7100);
+ assert.equal(officeRequests,2,'Initial failure must back off 3s then 6s, not retry every second');assert.deepEqual(errors,[],'An initial failure must not render null data as an exception');
+ offline=false;await page.locator('#refresh').click();await page.waitForFunction(()=>document.getElementById('connection').textContent==='실시간 연결');await page.waitForFunction(()=>document.querySelectorAll('.agenda-card').length===1);
+ const check=page.locator('[data-agenda="MTG-PERF-1"]');await check.check();await check.focus();
+ await page.evaluate(()=>{window.__agendaNode=document.querySelector('[data-agenda="MTG-PERF-1"]');window.__mutations=0;window.__observer=new MutationObserver(records=>window.__mutations+=records.length);window.__observer.observe(document.getElementById('agenda-list'),{childList:true,subtree:true});});
+ await page.waitForTimeout(200);const initialMeetings=meetingRequests;
+ async function refresh(){const done=page.waitForResponse(r=>new URL(r.url()).pathname==='/ops/office');await page.locator('#refresh').click();await done;await page.waitForTimeout(50);}
+ for(let i=0;i<5;i++)await refresh();assert.equal(meetingRequests,initialMeetings,'Unchanged office revisions must not trigger independent meeting fetches');assert.equal(await page.evaluate(()=>window.__mutations),0);assert(await check.isChecked());assert(await page.evaluate(()=>window.__agendaNode===document.querySelector('[data-agenda="MTG-PERF-1"]')));
+ await page.locator('#briefing-call').click();await page.waitForFunction(()=>document.querySelector('#briefing-content textarea'));await page.locator('#briefing-content textarea').fill('현재 입력 중인 대표 답변은 유지해야 합니다.');await page.evaluate(()=>window.__replyNode=document.querySelector('#briefing-content textarea'));
+ for(let i=0;i<3;i++)await refresh();assert.equal(await page.locator('#briefing-content textarea').inputValue(),'현재 입력 중인 대표 답변은 유지해야 합니다.');assert(await page.evaluate(()=>window.__replyNode===document.querySelector('#briefing-content textarea')));
+ // Writes invalidate the projection without a restart; approval state must not remain cached.
+ journal.agendas[0].status='APPROVED';fs.writeFileSync(journalPath,JSON.stringify(journal));await refresh();await page.waitForFunction(()=>document.getElementById('inbox-count').textContent.includes('승인 대기 0건'));assert.equal(await page.locator('[data-agenda="MTG-PERF-1"]').count(),0);
+ await page.waitForTimeout(200);await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});document.dispatchEvent(new Event('visibilitychange'));});const hiddenOffice=officeRequests,hiddenMeetings=meetingRequests;await page.waitForTimeout(8500);assert.equal(officeRequests,hiddenOffice);assert.equal(meetingRequests,hiddenMeetings);
+ const resumed=page.waitForResponse(r=>new URL(r.url()).pathname==='/ops/office');await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,get:()=>false});document.dispatchEvent(new Event('visibilitychange'));});await resumed;await page.waitForFunction(()=>document.getElementById('connection').textContent==='실시간 연결');assert(officeRequests>hiddenOffice);
+ assert.deepEqual(errors,[]);console.log('PASS: initial-error backoff/manual reconnect, stable agenda DOM and selection, unchanged-revision request suppression, preserved CEO reply node/text, file-change invalidation, hidden-tab network pause and immediate resume');
+ }finally{if(browser)await browser.close();child.kill('SIGTERM');fs.rmSync(temp,{recursive:true,force:true});}
+})().catch(e=>{console.error(e);process.exitCode=1;});

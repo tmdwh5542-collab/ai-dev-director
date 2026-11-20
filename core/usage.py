@@ -9,6 +9,7 @@ estimate from the text size, flagged as such.
 import contextvars
 import json
 import os
+import ntpath
 import re
 import sqlite3
 from datetime import datetime, timedelta
@@ -34,7 +35,8 @@ def context() -> Dict[str, Any]:
 
 
 def provider_of(argv0: str) -> Optional[str]:
-    base = os.path.basename(str(argv0 or "")).lower()
+    # Ledger entries/tests may contain paths from another platform (e.g. imported Windows runs on Linux).
+    base = ntpath.basename(str(argv0 or "")).lower()
     return PROVIDER_BY_CLI.get(base.split(".")[0])
 
 
@@ -83,6 +85,12 @@ def _conn() -> sqlite3.Connection:
         duration_sec REAL, prompt_chars INTEGER, output_chars INTEGER,
         tokens_in INTEGER, tokens_out INTEGER, tokens_total INTEGER, tokens_exact INTEGER DEFAULT 0,
         exit_code INTEGER, source TEXT DEFAULT 'live')""")
+    columns={r[1] for r in conn.execute('PRAGMA table_info(ai_usage)')}
+    for column in ('staff_id','staff_name','staff_team_revision','runtime'):
+        if column not in columns:
+            try:conn.execute('ALTER TABLE ai_usage ADD COLUMN '+column+' TEXT')
+            except sqlite3.OperationalError:
+                if column not in {r[1] for r in conn.execute('PRAGMA table_info(ai_usage)')}:raise
     conn.execute("CREATE INDEX IF NOT EXISTS ai_usage_started ON ai_usage(started_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS ai_usage_mission ON ai_usage(mission_id)")
     return conn
@@ -96,10 +104,10 @@ def call_started(argv: List[str], prompt: Optional[str]) -> Optional[int]:
     ctx = context()
     with _conn() as conn:
         cur = conn.execute(
-            "INSERT INTO ai_usage (started_at, status, provider, role, stage, run_id, mission_id, pid, prompt_chars) "
-            "VALUES (?, 'RUNNING', ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO ai_usage (started_at, status, provider, role, stage, run_id, mission_id, pid, prompt_chars, staff_id, staff_name, staff_team_revision, runtime) "
+            "VALUES (?, 'RUNNING', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (datetime.utcnow().isoformat(), provider, ctx.get("role"), ctx.get("stage"), ctx.get("run_id"),
-             ctx.get("mission_id"), os.getpid(), len(prompt or "")))
+             ctx.get("mission_id"), os.getpid(), len(prompt or ""),ctx.get("staff_id"),ctx.get("staff_name"),ctx.get("staff_team_revision"),ctx.get("runtime")))
         return cur.lastrowid
 
 
@@ -236,6 +244,7 @@ def running_now() -> List[Dict[str, Any]]:
             continue
         out.append({"provider": r["provider"], "provider_name": PROVIDER_NAME.get(r["provider"], r["provider"]),
                     "role": r["role"], "stage": r["stage"], "run_id": r["run_id"], "mission_id": r["mission_id"],
+                    "staff_id":r["staff_id"],"staff_name":r["staff_name"],"staff_team_revision":r["staff_team_revision"],"runtime":r["runtime"],
                     "started_at": r["started_at"], "elapsed_sec": int((datetime.utcnow() - started).total_seconds())})
     return out
 
@@ -245,6 +254,7 @@ def recent_calls(limit: int = 20) -> List[Dict[str, Any]]:
         rows = conn.execute("SELECT * FROM ai_usage WHERE status!='RUNNING' ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
     return [{"at": r["ended_at"] or r["started_at"], "provider": r["provider"],
              "provider_name": PROVIDER_NAME.get(r["provider"], r["provider"]), "role": r["role"], "stage": r["stage"],
+             "staff_id":r["staff_id"],"staff_name":r["staff_name"],"staff_team_revision":r["staff_team_revision"],"runtime":r["runtime"],
              "status": r["status"], "seconds": r["duration_sec"], "tokens": r["tokens_total"],
              "exact": bool(r["tokens_exact"]), "run_id": r["run_id"], "mission_id": r["mission_id"],
              "source": r["source"]} for r in rows]
@@ -257,6 +267,7 @@ def mission_calls(mission_id: str, limit: int = 400) -> List[Dict[str, Any]]:
                             (mission_id, limit)).fetchall()
     return [{"started_at": r["started_at"], "seconds": r["duration_sec"] or 0, "provider": r["provider"],
              "provider_name": PROVIDER_NAME.get(r["provider"], r["provider"]), "role": r["role"], "stage": r["stage"],
+             "staff_id":r["staff_id"],"staff_name":r["staff_name"],"staff_team_revision":r["staff_team_revision"],"runtime":r["runtime"],
              "status": r["status"], "tokens": r["tokens_total"], "exact": bool(r["tokens_exact"]),
              "run_id": r["run_id"]} for r in rows]
 
@@ -268,3 +279,18 @@ def summary(mission_id: Optional[str] = None) -> Dict[str, Any]:
     if mission_id:
         out["mission"] = aggregate(_rows("mission_id = ?", (mission_id,)))
     return out
+
+
+def today_total() -> Dict[str, Any]:
+    """Office counters only: aggregate in SQLite instead of loading the entire ledger into Python."""
+    kst_now = datetime.utcnow() + timedelta(hours=9)
+    start = (kst_now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=9)).isoformat()
+    with _conn() as conn:
+        row = conn.execute("""SELECT COUNT(*) AS calls,
+            COALESCE(SUM(status != 'OK'),0) AS failed,
+            COALESCE(SUM(duration_sec),0) AS seconds,
+            COALESCE(SUM(tokens_total),0) AS tokens,
+            COALESCE(SUM(CASE WHEN tokens_exact THEN tokens_total ELSE 0 END),0) AS exact_tokens,
+            COALESCE(SUM(tokens_total IS NULL),0) AS unknown_calls
+            FROM ai_usage WHERE started_at >= ? AND status != 'RUNNING'""", (start,)).fetchone()
+    return {**dict(row), 'seconds': round(row['seconds'], 1), 'providers': {}}

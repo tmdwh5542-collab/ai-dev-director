@@ -53,7 +53,8 @@ def test_snapshot_excludes_untracked_sensitive_directories(tmp_path):
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text('{}')
     sha = snapshot(p)
-    assert git(p, 'ls-tree', '-r', '--name-only', sha) == ''
+    assert git(p, 'ls-tree', '-r', '--name-only', sha) == 'data/fixture.json'
+    # Game levels and fixtures are project input; only credential directories are excluded.
 
 def test_control_root_rejected():
     from core.bootstrap import SOURCE_ROOT

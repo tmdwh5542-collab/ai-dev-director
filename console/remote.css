@@ -1,0 +1,6 @@
+.remote-banner{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:10px 20px;background:#173932;border-bottom:1px solid #477b6b;color:#c1f5df;font:11px/1.7 'Segoe UI','Malgun Gothic',sans-serif;position:relative;z-index:9}.remote-banner[data-state=offline]{background:#453328;border-color:#aa895a;color:#ffe0ad}.remote-banner button{font-size:10px;min-height:36px;padding:7px 10px;white-space:nowrap}.remote-device .topbar nav{gap:15px}.remote-device #shutdown,.remote-device #header-shutdown,.remote-device #browse-project{display:none!important}
+@media(max-width:700px){.remote-banner{font-size:10px;padding:8px 12px}.remote-banner button{flex:none}.remote-device .topbar{padding:15px}}
+
+body.remote-classic{height:auto!important;min-height:100vh;overflow:auto!important}
+
+.remote-actions{display:flex;gap:8px;flex:none}@media(max-width:700px){.remote-banner{align-items:flex-start;flex-direction:column;gap:7px}.remote-actions{width:100%;justify-content:flex-end}.remote-banner button{min-height:40px}}

@@ -125,6 +125,9 @@ class ClaudeReviewer:
         wt = Path(worktree_path).resolve() if worktree_path else Path.cwd()
 
         from core import usage
+        from core.workflows import role_guidance
+        from core import staffing
+        staffing.activate(order, 'REVIEWER')
         usage.set_context(role="REVIEWER")
         review_prompt = (
             "You are an expert read-only code reviewer evaluating code modifications in a repository.\n"
@@ -136,6 +139,8 @@ class ClaudeReviewer:
             "4. Check for code correctness, edge cases, and test assertions.\n"
             "5. File-count and diff-size limits are enforced by the Director, not by you: never report them as findings.\n\n"
             f"GOAL: {order.goal}\n"
+            f"SUPPLEMENTAL WORKFLOW REVIEW FOCUS (read-only mandates still apply): {role_guidance(order, 'REVIEWER')}\n"
+            f"STAFF FOCUS: {staffing.guidance(order, 'REVIEWER')}\n"
             f"ACCEPTANCE CRITERIA: {json.dumps(order.acceptance_criteria)}\n"
             f"ALLOWED DELETIONS: {json.dumps(order.allowed_deletions)}\n"
             f"VERIFICATION PASSED: {verification.get('passed')}\n"

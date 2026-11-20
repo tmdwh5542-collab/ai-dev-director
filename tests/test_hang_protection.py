@@ -3,6 +3,7 @@ import sys
 import time
 import tempfile
 import psutil
+from tests.process_status import process_is_executing
 import pytest
 from pathlib import Path
 
@@ -50,8 +51,8 @@ def test_hang_protection_tree_kill_and_failover():
         assert child_pid is not None
         time.sleep(0.5)
 
-        parent_alive = psutil.pid_exists(parent_pid)
-        child_alive = psutil.pid_exists(child_pid)
+        parent_alive = process_is_executing(parent_pid)
+        child_alive = process_is_executing(child_pid)
 
         assert res.timed_out is True
         assert elapsed < 10.0, f"Elapsed should be < 10s, got {elapsed}"

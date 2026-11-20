@@ -42,7 +42,9 @@ body.broadcast button.meta-chip::after{content:""}
 .live-chip[data-mode="replay"]{color:#111;background:var(--warn);border-color:var(--warn)}
 .live-chip[data-mode="replay"] i{background:#111}
 @keyframes beat{70%{box-shadow:0 0 0 8px #ff455800}100%{box-shadow:0 0 0 0 #ff455800}}
-.top-actions{display:flex;gap:6px}
+.top-actions{display:flex;gap:6px;min-width:0;overflow-x:auto;scrollbar-width:thin}
+.mission-center-link{display:flex;align-items:center;padding:0 12px;border:1px solid #3df2c066;border-radius:10px;color:var(--codex);text-decoration:none;font-size:12px;white-space:nowrap}
+.mission-center-link:hover{background:#3df2c018}
 .top-actions button{position:relative;height:34px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--muted);font-size:12.5px;transition:.2s}
 .top-actions button:hover{color:var(--text);border-color:var(--line2);background:rgba(255,255,255,.09)}
 .top-actions button.on{color:#06101c;background:var(--text);border-color:var(--text);font-weight:600}
@@ -232,6 +234,7 @@ body[data-view="workshop"] #stage,body[data-view="workshop"] #composer{display:n
 
 /* ---------- broadcast mode: the stage is the show */
 body.broadcast #composer,body.broadcast .top-actions button:not(#btn-broadcast),body.broadcast #attention{display:none}
+body.broadcast .mission-center-link{display:none}
 body.broadcast #stage{inset:64px 22px 22px 22px;grid-template-columns:300px minmax(0,1fr) 320px}
 body.broadcast #panel-now,body.broadcast #panel-work{background:rgba(9,13,24,.4);align-self:start;max-height:100%}
 body.broadcast #panel-now .feed,body.broadcast .footnote{display:none}

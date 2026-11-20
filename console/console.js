@@ -3,6 +3,21 @@ const frame=document.getElementById('workspace');
 const labels={NONE:'작업 대기',IDLE:'작업 대기',PLANNING:'계획 수립',ORDER_READY:'구현 준비',BUILDING:'코드 작성 중',VERIFYING:'테스트 실행 중',REVIEWING:'독립 검토 중',DECIDING:'결과 판단 중',PASS:'검증 통과',RECOVERED:'복구 완료 · 검증 통과',FAIL:'검증 실패',HUMAN_REQUIRED:'확인 · 수정 필요',TIMEOUT:'실행 시간 초과'};
 let busy=false,doc;
 function el(tag,text,cls){const n=doc.createElement(tag);n.textContent=text;if(cls)n.className=cls;return n;}
+// Keep existing nodes (focus, open details, scroll and CSS animations) across polling updates.
+function syncContent(target, source){
+ const wanted=[...source.childNodes];
+ for(let i=0;i<wanted.length;i++){
+  const fresh=wanted[i],old=target.childNodes[i];
+  if(!old){target.append(fresh);continue;}
+  if(old.nodeType!==fresh.nodeType||old.nodeName!==fresh.nodeName){old.replaceWith(fresh);continue;}
+  if(old.nodeType===Node.TEXT_NODE){if(old.nodeValue!==fresh.nodeValue)old.nodeValue=fresh.nodeValue;continue;}
+  if(old.nodeType!==Node.ELEMENT_NODE)continue;
+  for(const attribute of [...old.attributes])if(attribute.name!=='open'&&!fresh.hasAttribute(attribute.name))old.removeAttribute(attribute.name);
+  for(const attribute of [...fresh.attributes])if(attribute.name!=='open'&&old.getAttribute(attribute.name)!==attribute.value)old.setAttribute(attribute.name,attribute.value);
+  syncContent(old,fresh);
+ }
+ while(target.childNodes.length>wanted.length)target.lastChild.remove();
+}
 function setup(){
  doc=frame.contentDocument;if(!doc?.getElementById('main'))return;
  if(doc.getElementById('mission-control'))return;
@@ -47,7 +62,7 @@ async function refresh(){if(busy||!doc||!doc.getElementById('mission-control'))r
  for(const n of doc.querySelectorAll('.mission-stages span')){const i=order.indexOf(n.dataset.stage);n.classList.toggle('current',research?mapped===n.dataset.stage:(state===n.dataset.stage||(state==='ORDER_READY'&&n.dataset.stage==='PLANNING')));n.classList.toggle('paused',!research&&state==='HUMAN_REQUIRED'&&run.last_stage===n.dataset.stage);n.classList.toggle('done',!research&&at>i);}
  document.getElementById('shell-error').hidden=true;offlineVeil(0);
  }catch(e){const error=document.getElementById('shell-error');error.hidden=false;error.textContent='상태 연결을 확인하고 있습니다 · '+e.message;offlineVeil((window.__pollMisses||0)+1);}finally{busy=false;}}
-frame.addEventListener('load',setup);if(frame.contentDocument?.readyState==='complete')setup();setInterval(refresh,5000);
+frame.addEventListener('load',setup);if(frame.contentDocument?.readyState==='complete')setup();setInterval(refresh,5000);setInterval(refreshActivity,5000);
 
 async function setupRoles(){
  const domains={OPENAI:'openai',GOOGLE:'antigravity',ANTHROPIC:'claude'};
@@ -87,16 +102,16 @@ function setupActivity(panel){
  const calls=el('details','','mission-evidence');calls.append(el('summary','최근 AI 호출'));const callList=el('div','','ai-list');callList.id='ai-calls';calls.append(callList);
  const events=el('details','','mission-evidence');events.append(el('summary','최근 진행 기록 (단계 전환)'));const eventList=el('div','','ai-list');eventList.id='ai-events';events.append(eventList);
  box.append(head,now,grid,calls,events);panel.append(box);
- refreshActivity();setInterval(refreshActivity,5000);
+ refreshActivity();
 }
 function paintNow(a,focus){
- const now=doc.getElementById('ai-now');now.replaceChildren();
- if((a.working_now||[]).length){for(const w of a.working_now){const line=el('div','','ai-now-line working');line.append(el('span','','dot'),el('strong',(ROLE[w.role]||w.role||'AI')+' · '+(PROVIDER[w.provider]||w.provider)),el('span',' 작업 중 · '+fmtTime(w.elapsed_sec)+(w.stage_ko?' · '+w.stage_ko:'')+(w.mission_id?' · '+w.mission_id:'')));now.append(line);}return;}
- const line=el('div','','ai-now-line idle');line.append(el('span','','dot'),el('span',focus&&focus.live?'다음 AI 호출을 준비하고 있습니다.':'지금 실행 중인 AI 작업은 없습니다.'));now.append(line);
+ const original=doc.getElementById('ai-now'),now=original.cloneNode(false);
+ if((a.working_now||[]).length){for(const w of a.working_now){const line=el('div','','ai-now-line working');line.append(el('span','','dot'),el('strong',(ROLE[w.role]||w.role||'AI')+' · '+(PROVIDER[w.provider]||w.provider)),el('span',' 작업 중 · '+fmtTime(w.elapsed_sec)+(w.stage_ko?' · '+w.stage_ko:'')+(w.mission_id?' · '+w.mission_id:'')));now.append(line);}syncContent(original,now);return;}
+ const line=el('div','','ai-now-line idle');line.append(el('span','','dot'),el('span',focus&&focus.live?'다음 AI 호출을 준비하고 있습니다.':'지금 실행 중인 AI 작업은 없습니다.'));now.append(line);syncContent(original,now);
 }
 function paintMission(focus){
- const m=doc.getElementById('ai-mission'),opened=new Set([...m.querySelectorAll('details[open]>summary')].map(s=>s.textContent)),scroll=m.scrollTop;m.replaceChildren();
- if(!focus){m.append(el('strong','미션'),el('p','아직 미션 기록이 없습니다. 채팅으로 요청하면 여기에 단계별 진행이 표시됩니다.'));return;}
+ const original=doc.getElementById('ai-mission'),m=original.cloneNode(false),opened=new Set([...original.querySelectorAll('details[open]>summary')].map(s=>s.textContent)),scroll=original.scrollTop;m.replaceChildren();
+ if(!focus){m.append(el('strong','미션'),el('p','아직 미션 기록이 없습니다. 채팅으로 요청하면 여기에 단계별 진행이 표시됩니다.'));syncContent(original,m);return;}
  const status=focus.status==='RUNNING'?(focus.live?'진행 중':'중단됨 · 재개 대기'):(MISSION_STATUS[focus.status]||focus.status);
  const title=el('div','','ai-mission-title');title.append(el('strong','미션 · '+focus.project),el('span',status,'ai-badge '+(focus.status==='DONE'?'ok':focus.status==='RUNNING'&&focus.live?'run':'warn')));
  m.append(title,el('p',focus.goal,'ai-goal'));
@@ -109,23 +124,25 @@ function paintMission(focus){
  if(focus.summary){const sm=el('details');sm.append(el('summary','HEAD 요약'),el('p',focus.summary));m.append(sm);}
  if(focus.blocked_reason){m.append(el('small','멈춘 이유: '+focus.blocked_reason,'ai-sub'));}
  if(focus.deliverable)m.append(el('small','결과물 위치: '+focus.deliverable,'ai-sub path'));
- for(const d of m.querySelectorAll('details'))if(opened.has(d.querySelector('summary').textContent))d.open=true;m.scrollTop=scroll;
+ for(const d of m.querySelectorAll('details'))if(opened.has(d.querySelector('summary').textContent))d.open=true;syncContent(original,m);original.scrollTop=scroll;
 }
 function paintWork(a){
  for(const b of doc.querySelectorAll('.ai-tabs button')){b.classList.toggle('on',b.dataset.win===usageWindow);b.disabled=b.dataset.win==='mission'&&!a.usage.mission;}
  if(usageWindow==='mission'&&!a.usage.mission)usageWindow='today';
- const win=a.usage[usageWindow],table=doc.getElementById('ai-work');table.replaceChildren();
+ const win=a.usage[usageWindow],original=doc.getElementById('ai-work'),table=original.cloneNode(false);
  const header=el('div','','ai-row head');for(const h of ['역할','담당 AI (호출 수)','호출','CLI 작업 시간','토큰'])header.append(el('span',h));table.append(header);
  for(const role of ['HEAD','BUILDER','REVIEWER','OTHER']){const b=win.by_role[role];if(!b&&role==='OTHER')continue;const who=b?Object.entries(b.providers||{}).sort((x,y)=>y[1]-x[1]).map(([p,n])=>(PROVIDER[p]||p)+' '+n).join(', '):'기록 없음 (9/30 이전 호출은 미집계)';const row=el('div','','ai-row');row.append(el('span',ROLE[role]),el('span',who),el('span',b?String(b.calls)+(b.failed?' (실패 '+b.failed+')':''):'0'),el('span',b?fmtTime(b.seconds):'—'),el('span',fmtTokens(b)));table.append(row);}
- const tot=el('div','','ai-row total');tot.append(el('span','합계'),el('span',''),el('span',String(win.total.calls)),el('span',fmtTime(win.total.seconds)),el('span',fmtTokens(win.total)));table.append(tot);
+ const tot=el('div','','ai-row total');tot.append(el('span','합계'),el('span',''),el('span',String(win.total.calls)),el('span',fmtTime(win.total.seconds)),el('span',fmtTokens(win.total)));table.append(tot);syncContent(original,table);
  for(const p of ['OPENAI','GOOGLE','ANTHROPIC']){const node=doc.getElementById('node-'+p);if(!node)continue;let line=node.querySelector('.ai-card-usage');if(!line){line=el('p','','ai-card-usage');node.append(line);}const b=a.usage.today.by_provider[p],busy=(a.working_now||[]).find(w=>w.provider===p);line.textContent=(busy?'● 작업 중 · '+(ROLE[busy.role]||busy.role)+' · '+fmtTime(busy.elapsed_sec)+' — ':'')+'오늘 '+(b?b.calls+'회 · '+fmtTime(b.seconds)+' · 토큰 '+fmtTokens(b):'호출 없음');line.classList.toggle('busy',!!busy);}
 }
 function paintLists(a){
- const calls=doc.getElementById('ai-calls');calls.replaceChildren();
+ const oldCalls=doc.getElementById('ai-calls'),calls=oldCalls.cloneNode(false);
  for(const c of a.recent_calls||[])calls.append(el('div',ago(c.at)+' · '+(ROLE[c.role]||c.role||'?')+' · '+(PROVIDER[c.provider]||c.provider)+' · '+fmtTime(c.seconds)+' · '+(c.tokens?((c.exact?'':'~')+c.tokens.toLocaleString('ko-KR')+' 토큰'):'토큰 기록 전')+(c.status!=='OK'?' · '+c.status:''),'ai-item'));
  if(!calls.children.length)calls.append(el('div','아직 기록된 AI 호출이 없습니다.','ai-item'));
- const events=doc.getElementById('ai-events');events.replaceChildren();
+ syncContent(oldCalls,calls);
+ const oldEvents=doc.getElementById('ai-events'),events=oldEvents.cloneNode(false);
  for(const e of a.events||[])events.append(el('div',ago(e.at)+' · '+e.project+' · '+(e.state_ko||e.to_state)+(e.details?' — '+e.details:''),'ai-item'));
+ syncContent(oldEvents,events);
 }
 async function refreshActivity(){if(activityBusy||!doc||!doc.getElementById('ai-activity'))return;activityBusy=true;try{
  const response=await fetch('/ops/activity',{cache:'no-store'});if(!response.ok)throw Error('작업 현황 조회 실패');const a=await response.json();if(a.error)throw Error(a.error);

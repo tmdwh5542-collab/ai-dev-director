@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 from core.git_manager import GitManager
+from core.project_files import ENGINE_SUFFIXES
 
 
 PROJECT_TYPE_EXISTING = "EXISTING"
@@ -25,7 +26,7 @@ BASELINE_NOT_APPLICABLE_GREENFIELD = "NOT_APPLICABLE_GREENFIELD"
 
 _IGNORED_PARTS = {
     ".git", ".director_worktrees", "__pycache__", ".pytest_cache",
-    ".mypy_cache", ".ruff_cache", "node_modules", ".venv", "venv",
+    ".mypy_cache", ".ruff_cache", "node_modules", ".venv", "venv", ".godot",
 }
 _BENIGN_ROOT_FILES = {
     ".gitignore", ".gitattributes", ".editorconfig", "license", "license.md",
@@ -35,10 +36,10 @@ _SOURCE_SUFFIXES = {
     ".py", ".pyi", ".js", ".jsx", ".ts", ".tsx", ".java", ".kt", ".kts",
     ".go", ".rs", ".c", ".h", ".cc", ".cpp", ".cxx", ".cs", ".fs",
     ".rb", ".php", ".swift", ".scala", ".dart", ".lua", ".r", ".jl",
-    ".sql", ".vue", ".svelte", ".html", ".css", ".scss", ".sh", ".ps1",
+    ".gd", ".gdshader", ".cjs", ".mjs", ".sql", ".vue", ".svelte", ".html", ".css", ".scss", ".sh", ".ps1",
 }
 _PRODUCT_MANIFESTS = {
-    "package.json", "pyproject.toml", "setup.py", "setup.cfg", "requirements.txt",
+    "project.godot", "projectversion.txt", "package.json", "pyproject.toml", "setup.py", "setup.cfg", "requirements.txt",
     "pipfile", "poetry.lock", "cargo.toml", "go.mod", "go.sum", "pom.xml",
     "build.gradle", "build.gradle.kts", "composer.json", "gemfile", "makefile",
     "cmakelists.txt", "dockerfile", "docker-compose.yml", "docker-compose.yaml",

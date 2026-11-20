@@ -93,9 +93,9 @@ class DashboardAlreadyRunning(RuntimeError):
 
 
 class DashboardServer(ThreadingHTTPServer):
-    """Single-instance server: no SO_REUSEADDR (Windows would otherwise allow a duplicate LISTEN),
-    SO_EXCLUSIVEADDRUSE where available, and a clear error when the port is taken."""
-    allow_reuse_address = False
+    """Single listener: Windows uses exclusive binding; Unix permits same-port restart after TIME_WAIT.
+    SO_REUSEPORT is never enabled, so an existing listener still blocks a second server."""
+    allow_reuse_address = os.name != "nt"
     daemon_threads = True
 
     def server_bind(self):
@@ -688,7 +688,13 @@ def _run_mission_thread(sid: str, mission_id: str, key: str, reopen: bool = Fals
         try:
             if reopen:
                 runner.reopen(mission_id)
-            runner.run(mission_id)
+            completed = runner.run(mission_id)
+            try:
+                from core.company_meetings import after_mission
+                review = after_mission(completed, load_config(), validate_project_path)
+                if review: runner.notify('완료 후 부서 회의를 시작했습니다. 비서 보고함에서 확인하세요: '+review['id'])
+            except Exception as exc:
+                runner.notify('후속 회의를 시작하지 못했습니다. 완료된 개발 결과는 유지됩니다: '+str(exc)[:300])
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -702,14 +708,16 @@ def _run_mission_thread(sid: str, mission_id: str, key: str, reopen: bool = Fals
 
 
 def _start_mission(sid: str, orch: Orchestrator, project_path: str, goal: str, order, notes, profile: Optional[str] = None,
-                   source: str = "chat", request_id: Optional[str] = None, auto_apply: Optional[str] = None) -> Optional[str]:
+                   source: str = "chat", request_id: Optional[str] = None, auto_apply: Optional[str] = None,
+                   workflow_snapshot: Optional[dict] = None) -> Optional[str]:
     key = _project_key(project_path)
     with _RUN_LOCK:
         if key in _ACTIVE_PROJECTS or _project_busy(orch.sm, project_path):
             ChatManager().add_message(sid, "SYSTEM", BUSY_MESSAGE)
             return None
+        extra = {"workflow_snapshot": workflow_snapshot} if workflow_snapshot else {}
         mission = _mission_runner(sid).create(project_path, goal, order, config=orch.config, notes=notes, profile=profile,
-                                              source=source, request_id=request_id, auto_apply=auto_apply)
+                                              source=source, request_id=request_id, auto_apply=auto_apply, **extra)
         _ACTIVE_PROJECTS[key] = mission["mission_id"]
     ChatManager().add_message(
         sid, "SYSTEM",
@@ -759,6 +767,176 @@ def build_activity_payload(limit_missions: int = 5) -> dict:
             "events": events, "names": {"provider": usage.PROVIDER_NAME, "role": usage.ROLE_NAME}}
 
 
+def build_office_activity_payload() -> dict:
+    from core.office_queries import activity
+    return activity()
+
+
+def build_office_status_payload() -> dict:
+    from core.office_queries import status
+    return status()
+
+
+def submit_mission_launch(payload: dict) -> tuple:
+    """Capture the project with the request, persist its receipt, and plan outside the HTTP handler.
+
+    Shares the chat HEAD slot, so another tab cannot launch a second planner. Retries and
+    reconnects look up the receipt, including after restart; interrupted requests are not replayed.
+    """
+    from core.mission_launch import LaunchStore, LaunchBusy, normalize
+    payload = normalize(payload)
+    payload["project_path"] = str(Path(payload["project_path"]).resolve())
+    store = LaunchStore()
+    marker = "launch:" + payload["request_id"]
+    with _CHAT_STATE_LOCK:
+        existing = store.existing(payload)
+        if existing:
+            return existing, 200
+        if _CHAT_INFLIGHT["request_id"] is not None:
+            raise LaunchBusy("HEAD가 이전 요청을 처리하고 있습니다")
+        ok, info = validate_project_path(payload["project_path"])
+        if not ok:
+            raise ValueError("프로젝트를 선택한 뒤 다시 시도하세요: " + info)
+        with _RUN_LOCK:
+            if _project_key(info) in _ACTIVE_PROJECTS or _project_busy(StateMachine(), info):
+                raise LaunchBusy("이 프로젝트의 작업이 진행 중입니다")
+        from core import staffing
+        team_snapshot = staffing.validate(staffing.current())
+        claimed, receipt = store.claim(payload)
+        if not claimed:
+            return receipt, 200
+        _CHAT_INFLIGHT.update(request_id=marker, started_at=datetime.utcnow().isoformat())
+
+    def work():
+        try:
+            result = start_goal_mission(payload["project_path"], payload["goal"], profile=payload["profile"],
+                                        source="mission-center", request_id=payload["request_id"],
+                                        workflow_id=payload["workflow_id"], use_project_memory=payload["use_project_memory"], staff_team=team_snapshot)
+            store.finish(payload["request_id"], result)
+        except Exception as exc:
+            store.finish(payload["request_id"], {"status": "error", "error": str(exc)[:300]})
+        finally:
+            with _CHAT_STATE_LOCK:
+                if _CHAT_INFLIGHT["request_id"] == marker:
+                    _CHAT_INFLIGHT.update(request_id=None, started_at=None)
+            invalidate_status_cache()
+    try:
+        threading.Thread(target=work, name="director-launch-" + payload["request_id"], daemon=True).start()
+    except Exception:
+        store.finish(payload["request_id"], {"status": "error", "error": "작업 스레드를 시작하지 못했습니다"})
+        with _CHAT_STATE_LOCK:
+            if _CHAT_INFLIGHT["request_id"] == marker:
+                _CHAT_INFLIGHT.update(request_id=None, started_at=None)
+        raise
+    invalidate_status_cache()
+    return receipt, 202
+
+
+def build_project_choices() -> dict:
+    """Recent user projects, without creating folders, probing CLIs, or Solomon's allowlist."""
+    session = ChatManager().get_session(active_session_id()) or {}
+    paths = [session.get("project_path") or ""]
+    paths += [m.get("project_path") or "" for m in sorted(MissionStore().all(), key=lambda m: m.get("updated_at") or "", reverse=True)]
+    paths += list((load_config().get("projects") or {}).keys())
+    seen, projects = set(), []
+    for raw in paths:
+        if not raw:
+            continue
+        ok, resolved = validate_project_path(raw)
+        if not ok or resolved in seen:
+            continue
+        seen.add(resolved)
+        projects.append({"path": resolved, "name": Path(resolved).name})
+        if len(projects) >= 12:
+            break
+    return {"projects": projects, "current": session.get("project_path") or ""}
+
+
+def build_mission_step_payload(mission_id: str, index: int) -> Optional[dict]:
+    """Read bounded verifier/reviewer evidence for a stored step, never a client-supplied path."""
+    m = next((m for m in MissionStore().all() if m["mission_id"] == mission_id), None)
+    step = next((s for s in m.get("steps", []) if s["index"] == index), None) if m else None
+    if step is None:
+        return None
+    run_id = step.get("run_id") or ""
+    if not re.fullmatch(r"RUN-[A-Za-z0-9_-]+", run_id):
+        return {"run_id": run_id, "commands": [], "review": None, "diff": "", "available": False}
+    root = (DIRECTOR_ROOT / "runs").resolve()
+    run = root / run_id
+
+    def read(name):
+        try:
+            path = (run / name).resolve()
+        except (OSError, RuntimeError):
+            return {}
+        if root not in path.parents or run.resolve() not in path.parents:
+            return {}
+        try:
+            with path.open("rb") as stream:
+                raw = stream.read(512 * 1024 + 1)
+            if len(raw) > 512 * 1024:
+                return {}
+            obj = json.loads(raw)
+            return obj if isinstance(obj, dict) else {}
+        except (OSError, ValueError, UnicodeError):
+            return {}
+    verification = read("verification.json")
+    review = read("review.json")
+    development_rules=read("development_rules.json")
+    commands = []
+    for key, label in (("build", "빌드"), ("test", "테스트"), ("lint", "린트")):
+        cmd = verification.get(key)
+        if not isinstance(cmd, dict) or not cmd.get("executed"):
+            continue
+        output = str(cmd.get("output") or "")
+        command = cmd.get("command")
+        commands.append({"kind": key, "label": label, "command": (command if isinstance(command, str) else json.dumps(command, ensure_ascii=False))[:4000], "passed": bool(cmd.get("passed")),
+                         "exit_code": cmd.get("exit_code"), "output": output[-12000:], "truncated": len(output) > 12000})
+    runtime=development_rules.get('runtime') or {}
+    if runtime.get('executed'):
+        commands.append({'kind':'runtime','label':'실행 검증 · '+str(runtime.get('scope',''))[:300],'command':runtime.get('command'),'passed':bool(runtime.get('passed')),'exit_code':runtime.get('exit_code'),'output':str(runtime.get('output',''))[-12000:],'truncated':False})
+    diff = str(verification.get("git_diff") or "")
+    findings = {key: [str(x)[:2000] for x in review.get(key, [])[:20]] for key in ("p0", "p1", "p2") if isinstance(review.get(key), list)}
+    return {"development_rules":development_rules,"run_id": run_id, "available": bool(verification or review or development_rules), "commands": commands,
+            "review": {"verdict": review.get("verdict"), "summary": str(review.get("summary") or "")[:4000], **findings} if review else None,
+            "diff": diff[:16000], "diff_truncated": len(diff) > 16000}
+
+
+def build_missions_payload(query: str = "", status: str = "", page: int = 1, limit: int = 12,
+                           mission_id: str = "") -> dict:
+    """Read-only, paginated mission library. Expand evidence only for a selected mission/page.
+
+    IDs are matched against stored records, never interpolated into filesystem paths.
+    Counts describe the whole library; total describes the current search/filter.
+    """
+    from core import usage
+    if status not in ("", "RUNNING", "DONE", "INCOMPLETE", "BLOCKED", "FAILED", "STOPPED"):
+        raise ValueError("알 수 없는 미션 상태입니다")
+    page, limit = max(1, int(page)), min(50, max(1, int(limit)))
+    missions = sorted(MissionStore().all(), key=lambda m: (m.get("updated_at") or "", m["mission_id"]), reverse=True)
+    if mission_id:
+        mission = next((m for m in missions if m["mission_id"] == mission_id), None)
+        if mission is None:
+            return {"mission": None}
+        view = mission_view(mission)
+        view.update(goal=(mission.get("goal") or "")[:8000], summary=(mission.get("summary") or "")[:12000])
+        return {"mission": view, "calls": usage.mission_calls(mission_id)}
+    counts = {"all": len(missions)}
+    for m in missions:
+        key = m.get("status") or "UNKNOWN"
+        counts[key] = counts.get(key, 0) + 1
+    needle = query.strip()[:200].casefold()
+    rows = [m for m in missions if (not status or m.get("status") == status) and
+            (not needle or needle in " ".join(str(m.get(k) or "") for k in
+             ("mission_id", "goal", "project_path")).casefold())]
+    total = len(rows)
+    pages = max(1, (total + limit - 1) // limit)
+    page = min(page, pages)
+    sm = StateMachine()
+    return {"missions": [mission_view(m, sm) for m in rows[(page - 1) * limit:page * limit]],
+            "counts": counts, "total": total, "page": page, "pages": pages, "limit": limit}
+
+
 def build_replay_payload(mission_id: str = "") -> dict:
     """Recorded AI calls of one finished mission (default: the latest one with recorded calls) so the console can
     replay how the three AIs worked. Real ledger data only; read-only."""
@@ -793,14 +971,18 @@ def mission_view(m: dict, sm: Optional[StateMachine] = None) -> dict:
         state = (row or {}).get("current_state") or res.get("final_state")
         return {"index": step["index"], "goal": (step.get("order") or {}).get("goal", "")[:220],
                 "run_id": step.get("run_id"), "state": state, "state_ko": STAGE_KO.get(state, state),
+                "assigned_staff_id": (step.get('order') or {}).get('assigned_staff_id'),
+                "development_rules":res.get("development_rules"),
                 "tests": res.get("tests"), "review": res.get("review_verdict"), "repairs": res.get("repair_rounds"),
                 "builds_on_failed_attempt": bool(step.get("builds_on_failed_attempt")),
                 "note": (res.get("stop_detail") or "")[:220] if state not in ("PASS", None) else ""}
     applied = m.get("applied") or None
     return {"mission_id": m["mission_id"], "goal": m.get("goal", "")[:400], "status": m.get("status"),
+            "workflow_id": m.get("workflow_id"), "use_project_memory": m.get("use_project_memory"),
+            "memory_sources": m.get("planning_memory_sources", m.get("memory_sources", [])),
             "live": m.get("status") == "RUNNING" and _pid_alive(m.get("owner_pid")),
             "project": Path(m.get("project_path", "")).name, "project_path": m.get("project_path"),
-            "max_steps": m.get("max_steps"), "profile": m.get("profile", "standard"), "source": m.get("source", "chat"),
+            "max_steps": m.get("max_steps"), "staff_team": m.get("staff_team"), "profile": m.get("profile", "standard"), "source": m.get("source", "chat"),
             "request_id": m.get("request_id"),
             "passed_steps": sum(1 for s in m.get("steps", []) if (s.get("result") or {}).get("final_state") == "PASS"),
             "steps": [step_view(s) for s in m.get("steps", [])],
@@ -811,7 +993,8 @@ def mission_view(m: dict, sm: Optional[StateMachine] = None) -> dict:
 
 
 def start_goal_mission(project_path: str, goal: str, profile: Optional[str] = None, source: str = "api",
-                       request_id: Optional[str] = None, create_project: bool = False, auto_apply: Optional[str] = None) -> dict:
+                       request_id: Optional[str] = None, create_project: bool = False, auto_apply: Optional[str] = None,
+                       workflow_id: Optional[str] = None, use_project_memory: bool = True, staff_team: Optional[dict] = None) -> dict:
     """Goal in, mission out: HEAD turns the goal into an ORDER, the proxy gate narrows it, and the mission runs in
     the background. Used by the Solomon bridge and the CLI. Returns {status: started|busy|question|escalated|
     rejected, ...}; nothing here bypasses the entry gate or the Scope Guard."""
@@ -820,7 +1003,20 @@ def start_goal_mission(project_path: str, goal: str, profile: Optional[str] = No
     cm = ChatManager()
     if not cm.get_session(sid):
         cm.create_session(sid, "", _configured_head_domain())
+    if not isinstance(goal, str) or not goal.strip():
+        return {"status": "rejected", "error": "goal required"}
     tag_profile, goal = autopilot.split_profile_tag(goal)
+    from core import workflows
+    tagged_workflow, goal, tagged_memory = workflows.split_request_tags(goal)
+    if workflow_id in (None, "auto") and tagged_workflow:
+        workflow_id = tagged_workflow
+    use_project_memory = use_project_memory and tagged_memory
+    if workflow_id is not None:
+        try:
+            workflow_id = workflows.resolve_workflow(workflow_id, goal)
+        except ValueError as exc:
+            return {"status": "rejected", "error": str(exc)}
+    workflow_snapshot = None
     profile = profile or tag_profile or "standard"
     if profile not in autopilot.PROFILE_DEFAULTS and profile not in (autopilot.setting(load_config(), "profiles", {}) or {}):
         return {"status": "rejected", "error": f"unknown profile {profile!r}"}
@@ -834,13 +1030,19 @@ def start_goal_mission(project_path: str, goal: str, profile: Optional[str] = No
             return {"status": "rejected", "error": info}
         project_path = info
         orch = Orchestrator(config=load_config())
+        from core import staffing
+        orch.config['_staff_team'] = staffing.validate(staff_team if staff_team is not None else staffing.current())
     except Exception as e:
         return {"status": "rejected", "error": str(e)[:300]}
-    label = {"solomon": "솔로몬 CEO 지시", "cli": "CLI 지시", "api": "외부 지시"}.get(source, source)
+    label = {"solomon": "솔로몬 CEO 지시", "cli": "CLI 지시", "api": "외부 지시", "mission-center": "미션 센터"}.get(source, source)
     cm.add_message(sid, "USER", f"[{label} · {profile}] {goal}")
     try:
         previous = latest_deliverable(project_path) if autopilot.enabled(orch.config) else None
         project_context = orch._read_project_context(previous or project_path)
+        project_context = staffing.planning_context(project_context, orch.config['_staff_team'])
+        if workflow_id:
+            project_context = workflows.enrich_context(project_context, project_path, workflow_id, use_project_memory)
+            workflow_snapshot = workflows.snapshot(project_context, use_project_memory)
         if previous:
             project_context["note"] = "Continuing from the latest mission deliverable (isolated worktree) of this project; the listed files already exist there."
         from core import usage
@@ -856,6 +1058,11 @@ def start_goal_mission(project_path: str, goal: str, profile: Optional[str] = No
         return {"status": "rejected", "error": "HEAD did not produce a work order", "message": resp.get("message", "")}
     try:
         order = OrderSchema(**resp["order"])
+        if project_context.get('staff_team'):
+            from core import staffing
+            order = staffing.bind_order(order, project_context['staff_team'], project=project_path)
+        if workflow_id:
+            order = workflows.apply_workflow(order, workflow_id)
     except Exception as e:
         return {"status": "rejected", "error": f"order invalid: {str(e)[:300]}"}
     cm.add_message(sid, "HEAD", resp.get("message", ""))
@@ -868,10 +1075,12 @@ def start_goal_mission(project_path: str, goal: str, profile: Optional[str] = No
         cm.add_message(sid, "SYSTEM", f"HUMAN_REQUIRED: {gate['escalate']}", run_id=run_id)
         return {"status": "escalated", "run_id": run_id, "reason": gate["escalate"]}
     mission_id = _start_mission(sid, orch, project_path, goal, order, gate["notes"], profile=profile, source=source,
-                                request_id=request_id, auto_apply=auto_apply)
+                                request_id=request_id, auto_apply=auto_apply,
+                                **({"workflow_snapshot": workflow_snapshot} if workflow_snapshot else {}))
     if not mission_id:
         return {"status": "busy", "error": BUSY_MESSAGE}
-    return {"status": "started", "mission_id": mission_id, "project_path": project_path, "profile": profile}
+    return {"status": "started", "mission_id": mission_id, "project_path": project_path, "profile": profile,
+            "workflow_id": workflow_id, "memory_sources": (workflow_snapshot or {}).get("memory_sources", [])}
 
 
 STOP_INTENT = re.compile(r"(중단|중지|정지|멈춰|멈추|그만|스톱|\bstop\b|\bhalt\b|\babort\b)", re.IGNORECASE)
@@ -892,19 +1101,23 @@ def stop_missions(reason: str = "", mission_id: Optional[str] = None, by: str = 
     store = MissionStore()
     targets = [m for m in store.all() if m.get("status") == "RUNNING" and (not mission_id or m["mission_id"] == mission_id)]
     stopped = [stop_request(m["mission_id"], reason, by, store)["mission_id"] for m in targets]
-    killed = ProcessTreeRunner.kill_active() if stopped else []
+    from core.company_meetings import stop_all
+    meetings_stopped = stop_all() if stopped or not mission_id else 0
+    from core.hermes_agent import stop_all as stop_hermes
+    hermes_stopped=stop_hermes() if stopped or not mission_id else 0
+    killed = ProcessTreeRunner.kill_active() if stopped or meetings_stopped or hermes_stopped else []
     sid = active_session_id()
     if stopped:
         ChatManager().add_message(sid, "SYSTEM", f"[{by}] 작업 정지: 미션 {', '.join(stopped)} 정지 · 실행 중이던 AI 프로세스 {len(killed)}개 종료 · 기록과 작업본은 남습니다" + (f" · 사유: {reason[:200]}" if reason else ""))
     invalidate_status_cache()
-    return {"status": "stopped" if stopped else "idle", "missions": stopped, "killed": killed}
+    return {"status": "stopped" if stopped or meetings_stopped or hermes_stopped else "idle", "missions": stopped, "meetings": meetings_stopped, "hermes":hermes_stopped, "killed": killed}
 
 
 def decide_mission(mission_id: str, action: str, reason: str = "", max_steps: Optional[int] = None,
                    on_conflict: str = "block", by: str = "HUMAN") -> dict:
     """A decision about a finished mission: apply its deliverable, discard it, extend its budget and continue,
     or send a blocked step back to HEAD planning. The stopped run itself is never approved by this."""
-    from core.mission import deliverable_run_id
+    from core.mission import deliverable_run_id, _pid_alive
     store = MissionStore()
     m = store.load(mission_id)
     if not m:
@@ -934,8 +1147,12 @@ def decide_mission(mission_id: str, action: str, reason: str = "", max_steps: Op
         ChatManager().add_message(sid, "SYSTEM", f"[{by}] 미션 {mission_id} 결과물 폐기: {result.get('status')} {reason[:200]}")
         invalidate_status_cache()
         return result
-    if action in ("extend", "replan"):
-        if m.get("status") == "RUNNING":
+    if action in ("extend", "replan", "resume"):
+        if m.get("status") == "DONE":
+            return {"status": "error", "error": "완료된 미션입니다. 새 미션으로 요청하세요"}
+        if not m.get("steps"):
+            return {"status": "error", "error": "재개할 단계가 없습니다"}
+        if m.get("status") == "RUNNING" and (action != "resume" or _pid_alive(m.get("owner_pid"))):
             return {"status": "busy", "error": "mission is still running"}
         key = _project_key(m["project_path"])
         with _RUN_LOCK:
@@ -943,7 +1160,7 @@ def decide_mission(mission_id: str, action: str, reason: str = "", max_steps: Op
                 return {"status": "busy", "error": BUSY_MESSAGE}
             if max_steps:
                 m["max_steps"] = max(int(max_steps), len(m["steps"]) + 1)
-            elif action == "extend":
+            elif action == "extend" or (action in ("resume", "replan") and m.get("max_steps", 0) <= len(m["steps"])):
                 m["max_steps"] = len(m["steps"]) + 2
             if action == "replan":
                 m["steps"][-1]["operator_replan"] = (reason or f"{by} re-plan")[:300]
@@ -1005,6 +1222,11 @@ def handle_chat_message(msg: str):
         cm.create_session(sid, "", _configured_head_domain())
 
     cm.add_message(sid, "USER", msg)
+    from core import workflows
+    _tag_profile, unprofiled = autopilot.split_profile_tag(msg)
+    tagged_workflow, clean_message, use_project_memory = workflows.split_request_tags(unprofiled)
+    workflow_id = workflows.resolve_workflow(tagged_workflow, clean_message) if tagged_workflow else None
+    workflow_snapshot = None
 
     # "멈춰" is an operator command, not a conversation: stop the running mission(s) here instead of asking HEAD
     # to talk about stopping (2026-11-02: HEAD acknowledged '즉시 작업 중단' in words while the mission kept building).
@@ -1054,9 +1276,20 @@ def handle_chat_message(msg: str):
                                            "project; the listed files already exist there.")
         else:
             project_context = {"project_path": None, "existing_files": [], "note": "NO PROJECT SELECTED"}
+        if not project_context.get('staff_team'):
+            from core import staffing
+            project_context = staffing.planning_context(project_context, staffing.current())
+        if project_path:
+            from core.company_meetings import project_decisions
+            from core.executive_briefing import decisions as briefing_decisions
+            from core.hermes_agent import project_decisions as hermes_decisions
+            project_context['company_decisions'] = project_decisions(project_path)+briefing_decisions(project_path)+hermes_decisions(project_path)
+        if workflow_id and project_path:
+            project_context = workflows.enrich_context(project_context, project_path, workflow_id, use_project_memory)
+            workflow_snapshot = workflows.snapshot(project_context, use_project_memory)
         from core import usage
         usage.set_context(stage="CHAT", run_id=None, mission_id=None)
-        resp = orch.head.chat(msg, project_context, hist)
+        resp = orch.head.chat(clean_message if workflow_id else msg, project_context, hist)
     except Exception as e:
         # real call failed: record the real provider state (quota/auth/timeout) or leave it (config/unknown)
         head_domain = orch._get_agent_domain(orch.head)
@@ -1107,6 +1340,11 @@ def handle_chat_message(msg: str):
 
     try:
         order = OrderSchema(**resp["order"])
+        if project_context.get('staff_team'):
+            from core import staffing
+            order = staffing.bind_order(order, project_context['staff_team'], project=project_path)
+        if workflow_id:
+            order = workflows.apply_workflow(order, workflow_id)
     except Exception as e:
         cm.add_message(sid, "SYSTEM", f"Error parsing order: {str(e)}")
         return
@@ -1150,7 +1388,8 @@ def handle_chat_message(msg: str):
             cm.add_message(sid, "SYSTEM", f"HUMAN_REQUIRED: {gate['escalate']}", run_id=run_id)
             return
         tag_profile, _rest = autopilot.split_profile_tag(msg)
-        _start_mission(sid, orch, project_path, msg, order, gate["notes"], profile=tag_profile)
+        _start_mission(sid, orch, project_path, msg, order, gate["notes"], profile=tag_profile,
+                       **({"workflow_snapshot": workflow_snapshot} if workflow_snapshot else {}))
         return
 
     # 2. Entry approval policy: LOW/MEDIUM risk + valid + clearly scoped -> autonomous; otherwise HUMAN_REQUIRED
@@ -2994,6 +3233,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
         elif parsed.path == '/ops/activity':
             try:
                 self._send_json(build_activity_payload())
+            except Exception as e:
+                self._send_json({"error": str(e)[:300]}, 500)
+        elif parsed.path == '/ops/missions':
+            q = urllib.parse.parse_qs(parsed.query)
+            try:
+                payload = build_missions_payload(query=q.get('q', [''])[0], status=q.get('status', [''])[0],
+                    page=q.get('page', ['1'])[0], limit=q.get('limit', ['12'])[0],
+                    mission_id=q.get('mission_id', [''])[0][:80])
+                self._send_json(payload, 404 if payload.get('mission', True) is None else 200)
+            except (ValueError, TypeError, OverflowError):
+                self._send_json({"error": "검색 조건 또는 페이지 번호가 올바르지 않습니다"}, 400)
             except Exception as e:
                 self._send_json({"error": str(e)[:300]}, 500)
         elif parsed.path == '/ops/digest':

@@ -1,0 +1,3 @@
+-r requirements.txt
+# Existing provider-ops integration helpers import requests during collection.
+requests>=2.31

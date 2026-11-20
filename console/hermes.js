@@ -1,0 +1,22 @@
+'use strict';
+window.OfficeHermes=function({readJSON,onChange}){
+ const $=id=>document.getElementById(id);let state=null,context={},loading=false,busy=false,revisionKey=null,teamKey=null,requestId=null,lastPayload=null,generation=0;
+ const labels={QUEUED:'접수 대기',RUNNING:'Hermes 분석 중',STOPPING:'중지 중',STOPPED:'중지',INTERRUPTED:'실행 중단 · 재호출 안 함',FAILED:'실패',READY:'대표 채택 대기',APPROVED:'대표 채택',REJECTED:'반려'};
+ function el(tag,text){const n=document.createElement(tag);if(text!=null)n.textContent=text;return n;}
+ function error(message){$('hermes-error').textContent=message||'';$('hermes-error').hidden=!message;}
+ async function post(url,value){const roles=await readJSON('/ops/roles');return readJSON(url,{method:'POST',headers:{'Content-Type':'application/json','X-Solomon-Bridge':roles.csrf},body:JSON.stringify(value)});}
+ function render(){if(!state)return;const active=state.jobs.some(j=>['QUEUED','RUNNING','STOPPING'].includes(j.status));$('hermes-task-start').disabled=busy||active||!state.enabled||!context.project_path||!$('hermes-staff').value;$('hermes-state').textContent=state.enabled?'Hermes 활성화 · 분석 요청 시 모델 API를 사용합니다.':'Hermes 비활성 · PC의 AI·스킬 설정에서 실행 환경과 API 연결을 등록하세요.';
+  const key=state.ui_revision+context.project_path;if(revisionKey===key)return;revisionKey=key;const host=$('hermes-reports');host.replaceChildren();
+  for(const job of state.jobs.filter(j=>j.project_path===context.project_path).slice(0,12)){const card=el('article');card.className='agenda-card';card.append(el('strong',job.question),el('p',job.staff_name+' · '+(labels[job.status]||job.status)));if(job.error)card.append(el('p',job.error));if(job.report){card.append(el('p',job.report.summary));const list=el('ul');for(const item of job.report.recommendations)list.append(el('li',item));card.append(list);for(const q of job.report.questions)card.append(el('p','확인할 내용: '+q));const details=el('details'),summary=el('summary','실행 근거 · 사용량');details.append(summary,el('pre',JSON.stringify(job.provenance,null,2)));card.append(details);}
+   if(job.status==='READY')for(const [action,label] of [['approve','다음 계획에 채택'],['reject','반려']]){const b=el('button',label);b.type='button';b.className='secondary';b.onclick=()=>operate(async()=>{state=await post('/ops/hermes/decide',{id:job.id,action,expected_revision:state.revision});generation++;render();onChange();});card.append(b);}
+   if(['QUEUED','RUNNING','STOPPING'].includes(job.status)){const b=el('button','이 업무 중지');b.type='button';b.className='quiet';b.disabled=job.status==='STOPPING';b.onclick=()=>operate(async()=>{state=await post('/ops/hermes/stop',{id:job.id});generation++;render();onChange();});card.append(b);}host.append(card);
+  }
+  if(!host.children.length)host.append(el('p','이 프로젝트의 Hermes 보고서가 아직 없습니다.'));
+ }
+ async function refresh(){if(loading)return;loading=true;const seq=++generation;try{const result=await readJSON('/ops/hermes/tasks?revision='+encodeURIComponent(state?.ui_revision||''));if(seq===generation&&!result.unchanged){state=result;render();}}catch(e){error(e.message);}finally{loading=false;}}
+ async function operate(fn){if(busy)return;busy=true;error('');render();try{await fn();}catch(e){error(e.message);await refresh();}finally{busy=false;render();}}
+ function setContext(value){context=value;const members=context.team?.members||[],key=JSON.stringify(members.map(m=>[m.id,m.name]));if(teamKey!==key){teamKey=key;const chosen=$('hermes-staff').value;$('hermes-staff').replaceChildren();for(const m of members){const o=el('option',m.name+(m.position==='secretary'?' · 비서':''));o.value=m.id;$('hermes-staff').append(o);}$('hermes-staff').value=members.some(m=>m.id===chosen)?chosen:(members.find(m=>m.position==='secretary')||members.find(m=>m.slot==='HEAD')||members[0])?.id||'';}render();}
+ $('hermes-staff').onchange=render;$('hermes-refresh').onclick=refresh;
+ $('hermes-task-form').onsubmit=event=>{event.preventDefault();operate(async()=>{const payload={project_path:context.project_path,staff_id:$('hermes-staff').value,question:$('hermes-question').value.trim(),material:$('hermes-material').value,github_url:$('hermes-github').value.trim()},key=JSON.stringify(payload);if(lastPayload!==key){requestId=crypto.randomUUID();lastPayload=key;}const receipt=await post('/ops/hermes/tasks',{...payload,request_id:requestId});$('hermes-message').textContent='Hermes 업무 접수: '+receipt.id;requestId=null;lastPayload=null;await refresh();onChange();});};
+ refresh();return {setContext,setRevision:revision=>{if(revision&&state?.ui_revision!==revision)refresh();}};
+};

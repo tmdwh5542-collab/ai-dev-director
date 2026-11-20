@@ -1,0 +1,38 @@
+'use strict';
+window.OfficeMeetings=function({readJSON}){
+ const $=id=>document.getElementById(id);let context={},state=null,busy=false,loading=false,requestId=null,lastTopic=null,reportText='',renderKey=null,generation=0;const selected=new Set();
+ const labels={QUEUED:'회의 대기',RUNNING:'회의 진행 중',STOPPING:'회의 중단 중',STOPPED:'회의 중단',INTERRUPTED:'회의 중단 · 재시작 필요',DONE:'보고서 제출',FAILED:'회의 실패',PENDING:'대표 승인 대기',ADOPTED:'부서 채택',APPROVED:'대표 승인',REJECTED:'반려'};
+ const categories={implementation_detail:'구현 세부사항',test_coverage:'테스트 보강',documentation:'문서',architecture:'구조 설계',scope:'범위 변경',dependency:'외부 의존성',installation:'설치',budget:'비용',release:'배포',data:'데이터'};
+ function el(tag,text,cls){const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;}
+ function error(text){$('meeting-error').hidden=!text;$('meeting-error').textContent=text||'';}
+ async function request(url,options={}){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);try{return await readJSON(url,options,controller.signal);}catch(e){if(e.name==='AbortError')throw Error('응답 시간이 초과됐습니다. 보고함을 새로고침해 처리 여부를 확인하세요.');throw e;}finally{clearTimeout(timer);}}
+ async function post(url,payload){const roles=await request('/ops/roles');return request(url,{method:'POST',headers:{'Content-Type':'application/json','X-Solomon-Bridge':roles.csrf},body:JSON.stringify(payload)});}
+ function render(){
+  const active=state.meetings.some(m=>['RUNNING','QUEUED','STOPPING'].includes(m.status));$('meeting-start').disabled=busy||active||!context.project_path;$('agenda-approve').disabled=busy;$('agenda-reject').disabled=busy;
+  const key=JSON.stringify([state.revision,context.project_path,context.team?.departments]);if(renderKey===key)return;renderKey=key;
+  const project=context.project_path,agendas=state.agendas.filter(a=>a.project_path===project).sort((a,b)=>Number(b.status==='PENDING')-Number(a.status==='PENDING')),pending=agendas.filter(a=>a.status==='PENDING');
+  for(const id of [...selected])if(!pending.some(a=>a.id===id))selected.delete(id);
+  $('inbox-count').textContent='현재 프로젝트 · 승인 대기 '+pending.length+'건 / 채택·승인 '+agendas.filter(a=>['ADOPTED','APPROVED'].includes(a.status)).length+'건';
+  $('agenda-list').replaceChildren();for(const a of agendas.slice(0,40)){
+   const row=el('article',null,'agenda-card'),head=el('div',null,'agenda-head');if(a.status==='PENDING'){const checkbox=el('input');checkbox.type='checkbox';checkbox.checked=selected.has(a.id);checkbox.dataset.agenda=a.id;checkbox.setAttribute('aria-label',a.title+' 선택');checkbox.onchange=()=>{if(checkbox.checked&&selected.size>=30){checkbox.checked=false;error('한 번에 최대 30개 안건을 선택하세요.');return;}if(checkbox.checked)selected.add(a.id);else selected.delete(a.id);};head.append(checkbox);}head.append(el('strong',a.title),el('span',labels[a.status]||a.status,'agenda-status'));row.append(head,el('small',(categories[a.category]||a.category)+(a.impact_flags.length?' · 영향: '+a.impact_flags.join(', '):'')),el('p',a.reason),el('p','제안: '+a.action),el('p','독립 검토: '+a.review_reason,'muted'));if(a.executive_review_reason)row.append(el('p','임원회의 추가 검토: '+a.executive_review_reason,'muted'));$('agenda-list').append(row);
+  }
+  if(!agendas.length)$('agenda-list').append(el('p','이 프로젝트의 보고 안건이 없습니다. 부서회의를 시작해보세요.','muted'));
+  $('meeting-list').replaceChildren();for(const m of state.meetings.filter(m=>m.project_path===project).slice(0,12)){
+   const row=el('article',null,'meeting-row'),body=el('div');body.append(el('strong',m.topic.split('\n')[0]),el('small',(labels[m.status]||m.status)+' · '+(m.kind==='executive'?'임원회의':context.team?.departments?.[m.department]||'부서회의')+' · '+m.created_at));if(m.summary)body.append(el('p',m.summary));if(m.error)body.append(el('p',m.error,'meeting-failure'));const button=el('button','보고서 보기','secondary');button.type='button';button.onclick=()=>openReport(m.id);row.append(body,button);$('meeting-list').append(row);
+  }
+
+ }
+ async function refresh(){if(loading)return;loading=true;const seq=++generation;try{const result=await request('/ops/meetings?compact=1&revision='+encodeURIComponent(state?.revision||''));if(seq!==generation)return;if(!result.unchanged){state=result;render();}}catch(e){error(e.message);}finally{loading=false;}}
+ async function openReport(id){try{const m=await request('/ops/meetings?id='+encodeURIComponent(id));const agendas=(state?.agendas||[]).filter(a=>a.meeting_id===id||a.executive_meeting_id===id);reportText='# 회의 보고서\n\n'+m.topic+'\n\n상태: '+(labels[m.status]||m.status)+'\n프로젝트: '+m.project_path+'\n'+(m.report_method||'회의 기록 취합 중')+'\n\n'+(m.summary||'')+'\n\n'+m.transcript.map(t=>'## '+t.staff_name+' / '+t.provider+' / '+t.stage+'\n'+JSON.stringify(t.content,null,2)).join('\n\n')+'\n\n## 안건\n'+agendas.map(a=>'- '+a.title+' ['+labels[a.status]+']\n  '+a.action+'\n  독립 검토: '+a.review_reason).join('\n')+(m.error?'\n오류: '+m.error:'');$('meeting-report-content').textContent=reportText;$('meeting-report-dialog').showModal();}catch(e){error(e.message);}}
+ $('meeting-form').onsubmit=async event=>{event.preventDefault();if(busy)return;if(!context.project_path){error('먼저 미션 센터에서 프로젝트를 선택하세요.');return;}busy=true;error('');$('meeting-start').disabled=true;
+  const payload={topic:$('meeting-topic').value.trim(),kind:$('meeting-kind').value,department:$('meeting-department').value,project_path:context.project_path};const key=JSON.stringify(payload);if(lastTopic!==key){requestId=crypto.randomUUID();lastTopic=key;}
+  try{const result=await post('/ops/meetings',{...payload,request_id:requestId});$('meeting-message').textContent='회의를 접수했습니다: '+result.id+' · 실제 AI 연결을 사용합니다.';requestId=null;lastTopic=null;await refresh();}catch(e){error(e.message);}finally{busy=false;if(state)render();else $('meeting-start').disabled=false;}
+ };
+ async function decide(action){if(busy)return;const ids=[...selected];if(!ids.length){error('처리할 대기 안건을 선택하세요.');return;}if(!confirm(ids.length+'개 안건을 '+(action==='approve'?'승인':'반려')+'할까요? 승인한 제안은 다음 계획에 전달되며 설치·결제·코드 적용을 즉시 실행하지 않습니다.'))return;busy=true;error('');
+  try{const result=await post('/ops/meetings/decide',{ids,action,expected_revision:state.revision});generation++;state=result;selected.clear();renderKey=null;render();$('meeting-message').textContent=ids.length+'개 안건을 처리했습니다.';}catch(e){error(e.message);}finally{busy=false;if(state)render();}
+ }
+ $('agenda-approve').onclick=()=>decide('approve');$('agenda-reject').onclick=()=>decide('reject');$('agenda-select-all').onclick=()=>{for(const a of (state?.agendas||[]).filter(a=>a.status==='PENDING'&&a.project_path===context.project_path).slice(0,30))selected.add(a.id);renderKey=null;if(state)render();};
+ $('meetings-refresh').onclick=refresh;$('meeting-report-close').onclick=()=>$('meeting-report-dialog').close();$('meeting-report-copy').onclick=async()=>{try{await navigator.clipboard.writeText(reportText);$('meeting-report-copy').textContent='복사됨';}catch(e){$('meeting-report-content').focus();$('meeting-report-copy').textContent='본문을 선택해 복사하세요';}};
+ function setContext(value){const changed=context.project_path!==value.project_path;context=value;if(context.team?.departments&&!$('meeting-department').options.length){for(const [id,label] of Object.entries(context.team.departments)){const option=el('option',label);option.value=id;$('meeting-department').append(option);}$('meeting-department').value='development';}if(changed){selected.clear();renderKey=null;if(state)render();refresh();}else if(state)render();}
+ refresh();return {setContext,setRevision:revision=>{if(revision&&state?.revision!==revision)refresh();}};
+};

@@ -377,6 +377,13 @@ class ProviderManager:
                           failure_statuses) -> None:
         """Cheap probe (binary present + --version). Never fabricates HEALTHY: a provider in a
         failure state is only restored when a recheck is allowed (or forced) AND the probe succeeds."""
+        from core.ai_connections import api_route
+        route=api_route(domain)
+        if route:
+            if not os.environ.get(route['key_env']): self.set_status(domain,ProviderStatus.CONFIG_ERROR,'API key environment variable missing')
+            elif self.status_map.get(domain) != ProviderStatus.HEALTHY and (force or self.status_map.get(domain) in {ProviderStatus.UNKNOWN,ProviderStatus.UNAVAILABLE,ProviderStatus.CONFIG_ERROR}): self.set_status(domain,ProviderStatus.RECOVERING,'API configured; inference unverified')
+            self._update_provider_info(domain,'official-https-api',route['model'])
+            return
         if not cli_bin:
             self.set_status(domain, ProviderStatus.UNAVAILABLE, f"{cli_name} CLI missing")
             self._update_provider_info(domain, "UNKNOWN", "UNKNOWN")
@@ -558,6 +565,12 @@ class ProviderManager:
     def _mode_for_usable(self, usable_list: List[str]) -> Tuple[FailoverMode, List[str]]:
         """The one mode rule: 3 usable -> NORMAL, 2 -> DEGRADED, otherwise STOP."""
         usable = set(usable_list)
+        from core.ai_connections import load, DOMAINS
+        explicit=load()
+        if explicit:
+            required={DOMAINS[p] for p in explicit['roles'].values()}
+            down=[d for d in required if d not in usable]
+            return (FailoverMode.NORMAL if len(required)==3 else FailoverMode.DEGRADED,[]) if not down else (FailoverMode.STOP,down)
         healthy_providers = [domain for domain in self.status_map if domain in usable]
         down_providers = [
             f"{domain}({status.value})" for domain, status in self.status_map.items()

@@ -113,7 +113,7 @@ function sentence(m){
   if(m.phase==='BETWEEN')return ['','다음 AI 호출을 준비하고 있습니다'];
   return ['','세 AI가 지시를 기다리고 있습니다'];
 }
-function setSentence(node,m){const [who,rest]=sentence(m);node.replaceChildren();if(who)node.append(el('em',who));node.append(rest);}
+function setSentence(node,m){const [who,rest]=sentence(m),key=JSON.stringify([who,rest]);if(node.dataset.sentence===key)return;node.dataset.sentence=key;node.replaceChildren();if(who)node.append(el('em',who));node.append(rest);}
 function paintNow(m){
   document.body.dataset.phase=m.phase;
   document.documentElement.style.setProperty('--actor',actorColor(m));
@@ -171,7 +171,7 @@ async function decideMission(id,action,extra){
 function paintDelivery(m){
   let box=$('mission-delivery');
   if(!box){box=el('div','','delivery');box.id='mission-delivery';$('mission-card').append(box);}
-  box.replaceChildren();const ms=m.mission;
+  const ms=m.mission,key=JSON.stringify([m.mode,ms]);if(box._renderKey===key)return;box._renderKey=key;box.replaceChildren();
   if(!ms||m.mode!=='live'||!ms.deliverable||ms.status==='RUNNING'){return;}
   const state=(ms.applied&&ms.applied.status)||ms.applyState||'pending',[label,cls]=APPLY_KO[state]||[state,''];
   const head=el('div','','delivery-head');head.append(el('span',(ms.source==='solomon'?'솔로몬 지시 · ':'')+'결과물','kicker'),el('span',label,'badge '+cls));box.append(head);
@@ -210,8 +210,9 @@ function paintWork(m){
 function paintFeed(list,items,seen,render){
   const frag=[];
   for(const it of items){const li=el('li');render(li,it);if(!seen.has(it.key)){seen.add(it.key);if(!firstPaint)li.classList.add('new');}frag.push(li);}
-  list.replaceChildren(...frag);
-  if(!items.length)list.append(el('li','아직 기록이 없습니다.'));
+  const source=list.cloneNode(false);source.append(...frag);
+  if(!items.length)source.append(el('li','아직 기록이 없습니다.'));
+  if(typeof syncContent==='function')syncContent(list,source);else list.replaceChildren(...source.childNodes);
 }
 function stateColor(m,state){
   if(STEP_CLASS[state])return {ok:'#5ef2b0',bad:'#ff6b7a',warn:'#ffc46b'}[STEP_CLASS[state]];
@@ -331,6 +332,11 @@ function replayTick(){
 
 // ------------------------------------------------------------------ chat with HEAD
 let lastMsg=0,sending=false;
+const DRAFT_KEY='director.chat.draft.v1';
+let draftRequest=null;
+function saveDraft(){
+  try{localStorage.setItem(DRAFT_KEY,JSON.stringify({text:$('chat-text').value,requestId:draftRequest}));}catch(e){/* storage is optional */}
+}
 async function pollChat(){
   try{const data=await getJSON('/chat/messages?after_id='+lastMsg),log=$('chat-log'),stick=log.scrollTop+log.clientHeight>=log.scrollHeight-40;
     for(const msg of data.messages||[]){lastMsg=Math.max(lastMsg,msg.id);const role=['USER','HEAD','SYSTEM'].includes(msg.role)?msg.role:'SYSTEM';
@@ -343,13 +349,17 @@ async function pollChat(){
 }
 async function send(text){
   if(sending||!text.trim())return;sending=true;const btn=$('chat-send');btn.disabled=true;btn.textContent='전송 중…';
+  draftRequest=draftRequest||'stage-'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+  saveDraft();
   try{
-    const body=new URLSearchParams({message:text,request_id:'stage-'+Date.now().toString(36)+Math.random().toString(36).slice(2,8)});
+    const body=new URLSearchParams({message:text,request_id:draftRequest});
     const pending=fetch('/chat',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'},body});
-    $('chat-text').value='';grow();setTimeout(pollChat,600);
-    const res=await pending,out=await res.json().catch(()=>({}));
-    if(out.status==='busy')notice('HEAD가 이전 요청을 처리하고 있습니다. 잠시 뒤 다시 보내 주세요.');
-    else if(out.status==='error')notice('전송 실패 · '+(out.error||res.status));
+    setTimeout(pollChat,600);
+    const res=await pending,out=await res.json();
+    if(res.ok&&['accepted','duplicate'].includes(out.status)){
+      if($('chat-text').value===text){$('chat-text').value='';draftRequest=null;saveDraft();grow();}
+    }else if(out.status==='busy')notice('HEAD가 이전 요청을 처리하고 있습니다. 입력은 보관했습니다. 잠시 뒤 다시 보내 주세요.');
+    else {if(out.status==='error'||out.status==='empty'){draftRequest=null;saveDraft();}notice('전송 실패 · '+(out.error||res.status)+' · 입력은 보관했습니다.');}
   }catch(e){notice('전송 실패 · '+e.message);}
   finally{sending=false;btn.disabled=false;btn.textContent='보내기';pollChat();pollActivity();}
 }
@@ -384,7 +394,9 @@ function start(){
   for(const b of $('win-tabs').children)b.onclick=()=>{win=b.dataset.win;winAuto=false;repaint();};
   $('chat-peek').onclick=()=>{const log=$('chat-log');log.hidden=!log.hidden;$('chat-peek').setAttribute('aria-expanded',String(!log.hidden));if(!log.hidden)log.scrollTop=log.scrollHeight;};
   $('chat-form').addEventListener('submit',e=>{e.preventDefault();send($('chat-text').value);});
-  $('chat-text').addEventListener('input',grow);
+  try{const draft=JSON.parse(localStorage.getItem(DRAFT_KEY)||'{}');$('chat-text').value=typeof draft.text==='string'?draft.text.slice(0,8000):'';draftRequest=draft.requestId||null;}catch(e){/* ignore invalid drafts */}
+  grow();
+  $('chat-text').addEventListener('input',()=>{draftRequest=null;saveDraft();grow();});
   $('chat-text').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();send($('chat-text').value);}});
   document.addEventListener('keydown',e=>{
     if(e.key==='Escape'){$('chat-log').hidden=true;$('role-menu').hidden=true;if(replay)stopReplay();return;}

@@ -13,6 +13,7 @@ import json
 import hashlib
 import shutil
 import subprocess
+from core.subprocess_options import hidden_console
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -40,7 +41,7 @@ def _sha(p: Path) -> str:
 
 
 def _git(args: List[str], cwd: str) -> Tuple[int, str, str]:
-    r = subprocess.run(["git", "-c", "core.quotepath=false"] + args, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    r = subprocess.run(["git", "-c", "core.quotepath=false"] + args, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace", **hidden_console())
     return r.returncode, r.stdout, r.stderr
 
 
@@ -236,7 +237,7 @@ class ResultManager:
                 p = Path(worktree_path) / f
                 if p.is_file():
                     try:
-                        diffs[f] = "(new file)\n" + p.read_text(encoding="utf-8", errors="replace")[:20000]
+                        diffs[f] = "(new file)\n" + p.read_text(encoding="utf-8", errors="replace", **hidden_console())[:20000]
                     except Exception:
                         diffs[f] = "(new binary/unreadable file)"
             elif c["type"] == "D":
@@ -327,7 +328,7 @@ class ResultManager:
 
     @staticmethod
     def _open(path: str) -> Dict[str, Any]:
-        argv = ["explorer.exe", path] if os.name == "nt" else (["open", path] if sys.platform == "darwin" else ["xdg-open", path])
+        argv = ["explorer.exe", path] if sys.platform == "win32" else (["open", path] if sys.platform == "darwin" else ["xdg-open", path])
         try:
             subprocess.Popen(argv)                                   # argv, shell=False
         except OSError as exc:
@@ -576,7 +577,7 @@ class ResultManager:
         if not rels:
             return {}
         r = subprocess.run(["git", "-c", "core.quotepath=false", "hash-object", "--stdin-paths"], cwd=str(root),
-                           input="\n".join(rels) + "\n", capture_output=True, text=True, encoding="utf-8", errors="replace")
+                           input="\n".join(rels) + "\n", capture_output=True, text=True, encoding="utf-8", errors="replace", **hidden_console())
         if r.returncode:
             return {}
         return dict(zip(rels, r.stdout.split()))

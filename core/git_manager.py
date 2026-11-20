@@ -1,5 +1,6 @@
 import os
 import subprocess
+from core.subprocess_options import hidden_console
 from pathlib import Path
 from typing import Tuple, Optional
 
@@ -20,7 +21,8 @@ class GitManager:
             stderr=subprocess.PIPE,
             text=True,
             encoding="utf-8",
-            errors="replace"
+            errors="replace",
+            **hidden_console()
         )
         if res.returncode != 0:
             raise GitManagerError(f"Git command failed: {' '.join(cmd)}\nError: {res.stderr.strip()}")

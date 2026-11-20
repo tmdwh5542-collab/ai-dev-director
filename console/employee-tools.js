@@ -1,0 +1,15 @@
+'use strict';
+(async()=>{
+ const $=id=>document.getElementById(id);let state,csrf='',project='';
+ const message=t=>{$('employee-tool-message').textContent=t;};
+ async function json(url,options){const r=await fetch(url,{cache:'no-store',...options}),value=await r.json();if(!r.ok)throw Error(value.error||'요청 실패');return value;}
+ async function post(url,value){return json(url,{method:'POST',headers:{'Content-Type':'application/json','X-Solomon-Bridge':csrf},body:JSON.stringify(value)});}
+ function render(){const host=$('employee-tool-list');host.replaceChildren();for(const person of state.employees){const row=document.createElement('fieldset'),legend=document.createElement('legend');legend.textContent=person.name+' · '+person.slot;row.dataset.staff=person.id;row.append(legend);for(const [key,tool] of Object.entries(state.catalog)){const label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.value=key;input.checked=person.tools.includes(key);label.append(input,document.createTextNode(tool.name+' '));row.append(label);}host.append(row);}
+ for(const id of ['research-staff','tool-staff']){$(id).replaceChildren();for(const p of state.employees){const o=document.createElement('option');o.value=p.id;o.textContent=p.name;$(id).append(o);}}$('research-staff').value=state.research_staff_id||state.employees.find(p=>p.slot==='HEAD')?.id||'';
+ $('mcp-config').textContent=JSON.stringify({mcpServers:{director:{command:state.mcp.command,args:[state.mcp.script,'--project',project||'<프로젝트 절대 경로>','--staff',$('tool-staff').value||'<직원 ID>']}}},null,2);}
+ try{const [a,b,c]=await Promise.all([json('/ops/employee-tools'),json('/ops/roles'),json('/status')]);state=a;csrf=b.csrf;project=c.project_path;render();}catch(e){message(e.message);return;}
+ $('employee-tool-save').onclick=async()=>{try{const employees={};for(const row of document.querySelectorAll('[data-staff]'))employees[row.dataset.staff]=[...row.querySelectorAll('input:checked')].map(n=>n.value);state=await post('/ops/employee-tools',{expected_revision:state.revision,employees,research_staff_id:$('research-staff').value});render();message('직원별 읽기 도구와 공용 조사 담당을 저장했습니다. 기존 AI CLI의 MCP 등록은 아래 설정을 사용하세요.');}catch(e){message(e.message);}};
+ $('github-tool-read').onclick=async()=>{try{const data=await post('/ops/employee-tools/invoke',{staff_id:$('tool-staff').value,tool:'github_read',arguments:{repo:$('tool-repo').value.trim()}});$('tool-output').textContent=data.content;message('공개 GitHub 실제 조회 완료. 참고 자료는 실행하지 않았습니다.');}catch(e){message(e.message);}};
+ $('research-submit').onclick=async()=>{try{if(!project)throw Error('웹 작업실에서 프로젝트를 먼저 선택하세요.');const r=await post('/ops/research-desk',{request_id:crypto.randomUUID(),project_path:project,question:$('research-question').value,material:'',github_url:''});message('공용 조사 접수: '+r.id+' · 기존 Hermes 한도와 비서실 보고 흐름을 사용합니다.');}catch(e){message(e.message);}};
+ $('tool-staff').onchange=()=>{$('mcp-config').textContent=JSON.stringify({mcpServers:{director:{command:state.mcp.command,args:[state.mcp.script,'--project',project||'<프로젝트 절대 경로>','--staff',$('tool-staff').value]}}},null,2);};
+})();

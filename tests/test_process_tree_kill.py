@@ -3,6 +3,7 @@ import sys
 import time
 import tempfile
 import psutil
+from tests.process_status import process_is_executing
 import pytest
 from pathlib import Path
 from core.process_runner import ProcessTreeRunner
@@ -52,8 +53,8 @@ def test_process_tree_kill_on_timeout():
 
         # Check if parent and child are alive
         time.sleep(0.5) # Give OS a moment to finish cleanup
-        parent_alive = psutil.pid_exists(parent_pid)
-        child_alive = psutil.pid_exists(child_pid)
+        parent_alive = process_is_executing(parent_pid)
+        child_alive = process_is_executing(child_pid)
 
         # Verification of strict success criteria
         assert result.timed_out is True, "Process must be flagged as timed_out"

@@ -3,6 +3,7 @@ import sys
 import json
 import time
 import psutil
+from tests.process_status import process_is_executing
 import tempfile
 import subprocess
 import pytest
@@ -338,7 +339,7 @@ child.wait()
         if pid_file.exists():
             child_pid = int(pid_file.read_text().strip())
             time.sleep(0.5)
-            assert not psutil.pid_exists(child_pid), f"Child process {child_pid} leaked after timeout!"
+            assert not process_is_executing(child_pid), f"Child process {child_pid} leaked after timeout!"
 
 
 # =====================================================================

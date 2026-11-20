@@ -21,8 +21,10 @@ def test_zero_write_budget_empty_scope_is_auto_runnable():
     assert SafetyPolicy.assess_order_for_auto_run(_ro_order()) == []
 
 
-def test_zero_write_budget_whole_repo_scope_is_auto_runnable():
-    assert SafetyPolicy.assess_order_for_auto_run(_ro_order(allowed_paths=["."])) == []
+def test_zero_write_budget_whole_repo_preserves_protected_scope_gate():
+    reasons = SafetyPolicy.assess_order_for_auto_run(_ro_order(allowed_paths=["."]))
+    assert not any(r.startswith("AMBIGUOUS_SCOPE") for r in reasons)
+    assert any(r.startswith("PROTECTED_PATH") for r in reasons)
 
 
 def test_nonzero_write_budget_empty_scope_still_ambiguous():

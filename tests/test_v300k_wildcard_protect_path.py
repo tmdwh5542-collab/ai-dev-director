@@ -39,11 +39,9 @@ def test_bare_double_star_protect_still_denies_all_writes_via_hook():
                                             "args": {"TargetFile": str(wt / "src" / "anything.py")}}})
         r = subprocess.run([sys.executable, str(guard)], input=payload, text=True,
                             capture_output=True, timeout=10)
-        # The permission_guard hook only special-cases control-plane paths; the real
-        # deny-by-default enforcement for a non-granted path lives in the native AGY
-        # settings.json permissions (allow=[] here), so the hook itself allows this path -
-        # this assertion documents that native emptiness, not the hook, is what blocks it.
-        assert json.loads(r.stdout.strip())["decision"] == "allow"
+        # Both the native deny-by-default list and the hook enforce the empty grant.
+        assert json.loads(r.stdout.strip())["decision"] == "deny"
+
 
 
 def test_wildcard_protect_still_fails_closed_when_a_grant_exists():

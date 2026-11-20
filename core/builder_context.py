@@ -8,9 +8,17 @@ from xml.etree import ElementTree
 def referenced_documents(order):
     text = '\n'.join([order.goal, order.context or '', *order.acceptance_criteria])
     paths = list(getattr(order, 'reference_paths', []))
+    # Remove whole URL tokens before matching filesystem paths, including IPv6 hosts, query strings
+    # and trailing-dot hostnames whose slashes otherwise look like standalone POSIX references.
+    text = re.sub(r'''\b[A-Za-z][A-Za-z0-9+.-]*://[^\s<>"'`]+''', ' ', text)
     # A drive letter that starts a token (not the 'p' of 'http://', not a URL scheme '://') begins a document path.
     # A path never contains = * ? ' ( ): a sentence such as "E:\proj = a game ... see notes.md" is prose, not one path.
     paths += re.findall(r'(?<![A-Za-z0-9])[A-Za-z]:[/\\](?![/\\])[^\r\n"<>|`=*?\x27()]*?\.(?:docx|md|txt)(?=[\s"\x27`)\],;:]|$)', text, re.I)
+    # POSIX references: only a standalone absolute path, never a URL's /path or a repo-relative docs/file.md.
+    # Spaces are supported in quoted paths; unquoted paths end at whitespace to avoid consuming prose.
+    quoted = r'''(["'`])(/(?!/)[^\r\n"'`<>|=*?]*?\.(?:docx|md|txt))\1'''
+    paths += [match[1] for match in re.findall(quoted, text, re.I)]
+    paths += re.findall(r'''(?<![A-Za-z0-9_:/\\"'`])/(?!/)[^\s"<>|`=*?'()]+?\.(?:docx|md|txt)(?=[\s"'`)\],;:]|$)''', text, re.I)
     documents = {}
     for value in dict.fromkeys(paths):
         path = Path(value)

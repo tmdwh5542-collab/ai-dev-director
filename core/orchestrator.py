@@ -58,6 +58,10 @@ class Orchestrator:
         no_progress_timeout = self.timeouts.get("no_progress", 180)
         heartbeat_interval = self.timeouts.get("heartbeat", 30)
 
+        if self.config.get('ai_connections'):
+            from agents.connected_roles import ConnectedHead
+            from core.role_settings import ALIASES, DOMAINS
+            return ConnectedHead(domain=DOMAINS[ALIASES[provider]],model=model,timeout=timeout,no_progress_timeout=no_progress_timeout)
         if provider in ('google', 'antigravity'):
             from agents.google_roles import GoogleHead
             return GoogleHead(executable=executable, timeout=timeout, no_progress_timeout=no_progress_timeout)
@@ -95,6 +99,10 @@ class Orchestrator:
         no_progress_timeout = self.timeouts.get("no_progress", 180)
         heartbeat_interval = self.timeouts.get("heartbeat", 30)
 
+        if self.config.get('ai_connections'):
+            from agents.connected_roles import ConnectedReviewer
+            from core.role_settings import ALIASES, DOMAINS
+            return ConnectedReviewer(domain=DOMAINS[ALIASES[provider]],model=model,timeout=timeout,no_progress_timeout=no_progress_timeout)
         if provider in ('google', 'antigravity'):
             from agents.google_roles import GoogleReviewer
             return GoogleReviewer(executable=executable, timeout=timeout, no_progress_timeout=no_progress_timeout)
@@ -128,18 +136,15 @@ class Orchestrator:
             return json.load(f)
 
     def _read_project_context(self, project_path: str) -> Dict[str, Any]:
-        proj = Path(project_path).resolve()
-        files = []
-        for root, dirs, filenames in os.walk(proj):
-            # Ignore git and worktree dirs
-            if ".git" in dirs:
-                dirs.remove(".git")
-            if ".director_worktrees" in dirs:
-                dirs.remove(".director_worktrees")
-            for fn in filenames:
-                rel = Path(root, fn).relative_to(proj).as_posix()
-                files.append(rel)
-        return {"project_path": str(proj), "existing_files": files[:100]}
+        from core.project_context import collect_project_context
+        from core import staffing
+        if hasattr(self, '_run_staff_team'):
+            team = self._run_staff_team
+        else:
+            team = self.config['_staff_team'] if '_staff_team' in self.config else staffing.current()
+        from core.development_rules import enrich as enrich_rules
+        context = enrich_rules(collect_project_context(project_path))
+        return staffing.planning_context(context, team) if team else context
 
     def _get_agent_domain(self, agent: Any) -> str:
         return ProviderManager.domain_for_provider(getattr(agent, "provider", ""))
@@ -283,6 +288,8 @@ class Orchestrator:
                                     run_id: str, logger: logging.Logger) -> Dict[str, Any]:
         """Keeps the requested roles where their CLI is usable; replaces an unusable one with another usable
         provider (preferring one not already holding a role). Never silent: every swap is audited."""
+        if self.config.get('ai_connections'):
+            return self.pm.resolve_roles(req_head,req_builder,req_reviewer,strict=True)
         usable = set(self.pm.usable_domains())
         roles = {"head": req_head, "builder": req_builder, "reviewer": req_reviewer}
         notes = []
@@ -317,6 +324,7 @@ class Orchestrator:
                 "reason": "; ".join(notes) or "All selected providers usable."}
 
     def _swap_agent(self, role: str, run_id: str, logger: logging.Logger, tried: set, stage: str, why: str) -> bool:
+        if self.config.get('ai_connections'): return False  # explicit registration never silently routes to another account
         """Replace HEAD/BUILDER/REVIEWER with another usable provider. Returns False when none is left."""
         others = {self._get_agent_domain(a) for r, a in (("head", self.head), ("builder", self.builder),
                                                            ("reviewer", self.reviewer)) if r != role}
@@ -400,6 +408,12 @@ class Orchestrator:
                     setattr(order, field, getattr(fixed, field))
                 logger.info("[HEAD proxy] ORDER auto-repair: " + "; ".join(notes))
                 self.sm.log_audit(run_id, "ORCHESTRATOR", "ORDER_AUTOREPAIR", "; ".join(notes))
+        from core import staffing
+        team = self._load_json(run_id, 'staff_team.json')
+        if team:
+            bound = staffing.bind_order(order, team, project=(self.sm.get_run(run_id) or {}).get("project_path"))
+            order.staff_team, order.assigned_staff_id = bound.staff_team, bound.assigned_staff_id
+            order.staff_reference_project = bound.staff_reference_project
         cap_notes = self.apply_safety_caps(order)
         if cap_notes:
             logger.warning(f"[Safety Cap] {'; '.join(cap_notes)}")
@@ -656,6 +670,17 @@ class Orchestrator:
         build_cmd, test_cmd, lint_cmd = self._verification_cmds()
         before = self._dirty_state(worktree_path) if self._proxy() else None
         result = Verifier.verify(worktree_path=worktree_path, build_cmd=build_cmd, test_cmd=test_cmd, lint_cmd=lint_cmd)
+        # Runtime checks are inside the same Director verification/artifact pipeline.
+        runtime_order=self._load_json(run_id,'order.json')
+        if runtime_order:
+            from core import development_rules as rules
+            parsed_order=OrderSchema.model_validate(runtime_order)
+            reference=(self.sm.get_run(run_id) or {}).get('project_path') or parsed_order.staff_reference_project or worktree_path
+            snapshot=self._load_json(run_id,'development_rule_snapshot.json')
+            if snapshot is None:
+                snapshot=rules.config(reference);self._save_json(run_id,'development_rule_snapshot.json',snapshot)
+            result['development_rules']=rules.assess(reference,parsed_order,worktree_path,result,None,Verifier._execute_cmd,settings=snapshot,engine_command=test_cmd)
+
         if before is not None:
             after = self._dirty_state(worktree_path)
             changed = {p for p, sig in after.items() if before.get(p, "absent") != sig and not SafetyPolicy.is_runtime_artifact(p)}
@@ -686,6 +711,8 @@ class Orchestrator:
                 known = set(self._load_json(run_id, "verification_artifacts.json") or [])
                 self._save_json(run_id, "verification_artifacts.json", sorted(known | remaining))
                 self.sm.log_audit(run_id, "ORCHESTRATOR", "VERIFICATION_ARTIFACTS", ", ".join(sorted(remaining))[:1000])
+        if result.get('development_rules',{}).get('runtime',{}).get('executed'):
+            result['development_rules']['runtime']['worktree_stamp']=rules.tree_stamp(worktree_path)
         return result
 
     @staticmethod
@@ -786,9 +813,19 @@ class Orchestrator:
                 verification['passed'] = True
                 verification['preexisting_failures'] = sorted(unchanged)
                 verification['summary'] += '; PRE-EXISTING FAILURES UNCHANGED (no new failures): ' + ', '.join(sorted(unchanged)[:10])
+        from core import development_rules as rules
+        reference=(self.sm.get_run(run_id) or {}).get('project_path') or order.staff_reference_project or worktree_path
+        snapshot=self._load_json(run_id,'development_rule_snapshot.json')
+        if snapshot is None:
+            snapshot=rules.config(reference);self._save_json(run_id,'development_rule_snapshot.json',snapshot)
+        if 'development_rules' not in verification:
+            verification['development_rules']=rules.assess(reference,order,worktree_path,verification,None,Verifier._execute_cmd,settings=snapshot,engine_command=self._verification_cmds()[1])
+        self._save_json(run_id,'development_rules.json',verification['development_rules'])
         self._save_json(run_id, "verification.json", verification)
         self.sm.log_audit(run_id, "ORCHESTRATOR", "VERIFICATION", json.dumps(verification))
         if not verification["passed"]:
+            failure_detail=str(verification.get("summary", ""))+" · "+str((verification.get("test") or {}).get("output", ""))[-800:]
+            rules.record(reference,run_id,order.goal,State.FAIL,verification["development_rules"],[failure_detail])
             if self.config.get('autonomy', {}).get('enabled'):
                 return verification, None
             self._save_json(run_id, "provenance.json", {"run_id": run_id, "records": provenance_records})
@@ -1079,6 +1116,10 @@ class Orchestrator:
         rev_family = getattr(self.reviewer, "agent_family", rev_prov).lower()
         is_both_claude = (head_prov in ("claude", "anthropic") and rev_prov in ("claude", "anthropic"))
         is_same_family = (head_family == rev_family and head_family not in ("mock", "unknown", "openai"))
+        explicit_same = self.config.get('ai_connections',{}).get('allow_same_provider',False)
+        if explicit_same and head_prov == rev_prov:
+            decision.rationale = (decision.rationale or '') + ' [REDUCED_INDEPENDENCE: explicitly configured same-provider second review]'
+            return State.PASS
         if (is_both_claude or is_same_family) and self._proxy():
             logger.warning(f"Reduced independence: HEAD ({head_prov}) and REVIEWER ({rev_prov}) share a provider after failover; "
                            "PASS kept on the user's delegated policy (tests + review green), recorded in the rationale.")
@@ -1267,6 +1308,23 @@ class Orchestrator:
                 decision.decision = "HUMAN_REQUIRED"
                 decision.rationale = f"Overridden by Orchestrator: {msg}"
                 final_state = State.HUMAN_REQUIRED
+        if order is not None:
+            from core import development_rules as rules
+            reference=(self.sm.get_run(run_id) or {}).get('project_path') or order.staff_reference_project or worktree_path
+            assessment=(verification or {}).get('development_rules') or self._load_json(run_id,'development_rules.json')
+            if assessment is None:
+                snapshot=self._load_json(run_id,'development_rule_snapshot.json') or rules.config(reference)
+                assessment=rules.assess(reference,order,worktree_path,verification,review_result,Verifier._execute_cmd,settings=snapshot)
+            assessment['review_verdict']=getattr(review_result,'verdict',None)
+            if assessment.get('runtime',{}).get('executed') and assessment.get('passed'):
+                if rules.tree_stamp(worktree_path)!=assessment['runtime'].get('worktree_stamp'):
+                    assessment['passed']=False;assessment['block_code']='RUNTIME_EVIDENCE_STALE';assessment['guidance']='소스가 변경되어 이전 실행 근거가 만료됐습니다. 현재 작업본에서 다시 실행하세요.';assessment['unverified']=['현재 작업본의 실제 동작 미검증']
+            if final_state==State.PASS and not assessment['passed']:
+                final_state=State.FAIL;decision.decision='FAIL';decision.rationale='DEVELOPMENT_RULES: '+str(assessment['block_code'])+' · '+assessment['guidance']
+            self._save_json(run_id,'development_rules.json',assessment)
+            evidence['head_decision']=decision.decision;evidence['development_rules']=assessment
+            self._save_json(run_id,'final_evidence.json',evidence)
+            rules.record(reference,run_id,order.goal,final_state,assessment,list(review_result.p0)+list(review_result.p1))
         self._save_json(run_id, "decision.json", decision)
         self.sm.log_audit(run_id, "HEAD", "FINAL_DECISION", json.dumps(decision.model_dump()))
         self._save_json(run_id, "provenance.json", {"run_id": run_id, "records": provenance_records})
@@ -1379,6 +1437,12 @@ class Orchestrator:
         if not is_mock_run and builder_fn is None:
             for role_name in ("HEAD", "BUILDER", "REVIEWER"):
                 agent = getattr(self, role_name.lower())
+                from core.ai_connections import api_route
+                route=api_route(self._get_agent_domain(agent)) if self.config.get('ai_connections') else None
+                if route:
+                    if not os.environ.get(route['key_env']):
+                        return self._stop(run_id,State.HUMAN_REQUIRED,'CONFIG_ERROR: API key environment variable missing')
+                    continue
                 exe = getattr(agent, "executable", None)
                 ver = agent.get_version() if hasattr(agent, "get_version") else "unknown"
                 if (not exe or not Path(exe).exists() or ver == "unknown") and self._proxy():
@@ -1400,7 +1464,12 @@ class Orchestrator:
         self.sm.transition_to(run_id, State.PLANNING, details="Head generating ORDER.json")
         logger.info("State -> PLANNING")
     
+        from core import staffing
+        self._run_staff_team = (order.staff_team if order is not None and order.staff_team else
+                                self.config['_staff_team'] if '_staff_team' in self.config else staffing.current())
         project_context = self._read_project_context(proj_path)
+        if self._run_staff_team:
+            self._save_json(run_id, 'staff_team.json', staffing.validate(self._run_staff_team))
         if order is not None:
             cap_notes = self.apply_safety_caps(order)
             if cap_notes:
@@ -1710,6 +1779,7 @@ class Orchestrator:
 
         order_data = self._load_json(run_id, "order.json")
         order = OrderSchema.model_validate(order_data) if order_data else None
+        self._run_staff_team = order.staff_team if order and order.staff_team else self._load_json(run_id, 'staff_team.json')
         project_context = self._read_project_context(project_path)
 
         if curr_state == State.PLANNING:
@@ -1890,6 +1960,7 @@ class Orchestrator:
             "baseline_verification": self._load_json(run_id, "baseline_verification.json"),
             "builder": builder_result.model_dump() if builder_result else self._load_json(run_id, "builder.json"),
             "verification": verification or self._load_json(run_id, "verification.json"),
+            "development_rules": self._load_json(run_id,"development_rules.json"),
             "review": review_result.model_dump() if review_result else self._load_json(run_id, "review.json"),
             "decision": decision.model_dump() if decision else self._load_json(run_id, "decision.json")
         }

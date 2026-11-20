@@ -84,7 +84,7 @@ def test_d_open_worktree_canonical_only(rm, monkeypatch):
         run_id, orch = _pass_run(proj)
         calls = []
         monkeypatch.setattr("core.result_manager.subprocess.Popen", lambda argv, **k: calls.append(argv))
-        monkeypatch.setattr("core.result_manager.os.name", "nt")
+        monkeypatch.setattr("core.result_manager.sys.platform", "win32")
         assert rm.open_worktree(run_id)["status"] == "ok"
         assert calls == [["explorer.exe", str(Path(orch.sm.get_run(run_id)["worktree_path"]).resolve())]]
         # tampered worktree path outside .director_worktrees -> refused, explorer not called

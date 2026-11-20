@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 from agents.antigravity_builder import AntigravityBuilder
 from core.bootstrap import prepare_project
-from core.research_runner import TriadResearchRunner, ResearchProviderCallError
+from core.research_runner import EvidenceOnlyRunner as TriadResearchRunner, ResearchProviderCallError
 from core.safety import SafetyPolicy
 from core.autopilot import required_output_path as autopilot_output
 from schemas.builder_result import BuilderResultSchema
@@ -79,13 +79,16 @@ class ProposalBuilder(AntigravityBuilder):
         self.agent_family = {'openai':'codex','claude':'claude','antigravity':'antigravity'}[selected]
 
     def get_provenance(self, exit_code=0):
+        api=bool(self.last_execution_info.get('api_key_used'))
         return super().get_provenance(exit_code).model_copy(update={
-            'provider': self.provider, 'runtime': self.agent_family + '-cli'})
+            'provider': self.provider, 'http_status':self.last_execution_info.get('http_status'),'runtime': self.agent_family + ('-api' if api else '-cli'),
+            'executable':self.last_execution_info.get('transport_executable') or str(self.executable or 'uninvoked'),'version':self.last_execution_info.get('transport_version') or 'unknown','authentication_mode':'api_key' if api else 'subscription','api_key_policy':'explicit_opt_in' if api else 'disabled','api_key_used':api})
 
     def run(self, order, worktree_path, builder_fn=None):
         if builder_fn is not None:
             return super().run(order, worktree_path, builder_fn)
-        from core import usage
+        from core import usage, staffing
+        staffing.activate(order, 'BUILDER')
         usage.set_context(role='BUILDER')
         self.last_execution_info = {'exit_code': None, 'attempts': [], 'output': ''}
         root = Path(worktree_path).resolve()
@@ -150,7 +153,7 @@ class ProposalBuilder(AntigravityBuilder):
                   'Return only changed files. No deletion operations. Stay within file and diff budgets. '
                   'HEAD feedback and outstanding reviewer findings in context must be resolved. '
                   'Director host Python is ' + sys.version.split()[0] + '; platform is ' + sys.platform +
-                  '. Honor any project-specific runtime requirements in the ORDER.\nORDER:\n' + order.model_dump_json() +
+                  '. Honor any project-specific runtime requirements in the ORDER.\nSTAFF FOCUS:\n' + staffing.guidance(order, 'BUILDER') + '\nORDER:\n' + order.model_dump_json() +
                   '\nREFERENCE DOCUMENTS:\n' + json.dumps(documents, ensure_ascii=False) +
                   '\nREFERENCE SOURCE FILES (read-only unless ORDER allows writes; omitted files are not necessarily absent):\n' + json.dumps(sources, ensure_ascii=False)
                   + ('\nWRITABLE FILES NOT SHOWN (too large for this prompt; they exist - do NOT rewrite or edit them): '
@@ -168,12 +171,17 @@ class ProposalBuilder(AntigravityBuilder):
                     attempts=getattr(exc, 'attempts', []), exit_code=exc.meta.get('exit_code'),
                     execution_duration_sec=sum(a.get('duration_sec', 0) for a in getattr(exc, 'attempts', [])))
                 raise
-        self.last_execution_info = {'invocation_command': result['invocation'], 'exit_code': result['exit_code'],
+        self.last_execution_info = {'api_key_used':result.get('api_key_used',False),'http_status':result.get('http_status'),'transport_executable':result.get('executable'),'transport_version':result.get('version'),'invocation_command': result['invocation'], 'exit_code': result['exit_code'],
                                     'execution_duration_sec': result['duration_sec'], 'output': result['output'],
                                     'attempts': result.get('attempts', []), 'attempt_number': result.get('attempt_number', 1),
                                     'context_files': self.last_context_files, 'prompt_chars': len(prompt),
                                     'omitted_files': self.last_omitted_files}
         text = result['output'].strip()
+        if domain=='ANTHROPIC' and not result.get('api_key_used'):
+            try:
+                envelope=json.loads(text)
+                if isinstance(envelope,dict) and isinstance(envelope.get('result'),str): text=envelope['result']
+            except ValueError: pass
         if text.startswith('```'):
             text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
         proposal, repairs = self.parse_proposal(text)

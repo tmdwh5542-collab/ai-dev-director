@@ -157,6 +157,8 @@ class CodexHead(BaseHead):
         return res.stdout
 
     def create_order(self, goal: str, project_context: Dict[str, Any]) -> OrderSchema:
+        from core import staffing
+        staffing.activate_planning(project_context.get('staff_team'))
         prompt = (
             "You are the HEAD architect of an autonomous software engineering system.\n"
             "Your task is to analyze the user goal and project files, then generate a strict work ORDER in JSON format.\n"
@@ -171,6 +173,7 @@ class CodexHead(BaseHead):
             "SCHEMA SPECIFICATION:\n"
             "{\n"
             '  "goal": string,\n'
+            '  "assigned_staff_id": string|null from captured BUILDER staff,\n'
             '  "allowed_paths": string[],\n'
             '  "protected_paths": string[],\n'
             '  "acceptance_criteria": string[],\n'
@@ -198,6 +201,8 @@ class CodexHead(BaseHead):
         cwd: Optional[str] = None,
         **kwargs
     ) -> DecisionSchema:
+        from core import staffing
+        staffing.activate(order, 'HEAD')
         test_info = verification.get("test", {})
         evidence = {
             "order": order.model_dump(),
@@ -248,6 +253,8 @@ class CodexHead(BaseHead):
         return DecisionSchema.model_validate(data)
 
     def chat(self, message: str, project_context: Dict[str, Any], history: list) -> Dict[str, Any]:
+        from core import staffing
+        staffing.activate_planning(project_context.get('staff_team'))
         prompt = (
             "You are the HEAD architect of an autonomous software engineering system.\n"
             "The user is talking to you directly. You must determine if their message is a simple QUESTION or a DEV_TASK.\n\n"
@@ -263,6 +270,7 @@ class CodexHead(BaseHead):
             '  "message": "I will proceed with this task.",\n'
             '  "order": {\n'
             '      "goal": "...",\n'
+            '      "assigned_staff_id": "available BUILDER staff id, or null",\n'
             '      "allowed_paths": ["..."],\n'
             '      "protected_paths": ["..."],\n'
             '      "acceptance_criteria": ["..."],\n'

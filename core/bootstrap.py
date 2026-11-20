@@ -1,8 +1,10 @@
 """Prepare local projects without staging or committing the user's working copy."""
 import os
 import subprocess
+from core.subprocess_options import hidden_console
 import tempfile
 from pathlib import Path
+from core.project_files import ENGINE_SUFFIXES, MAX_NEW_FILE_BYTES, MAX_NEW_SNAPSHOT_BYTES, excluded_source_path
 
 SOURCE_ROOT = Path(__file__).resolve().parents[1]
 # What a milestone hands to the next one. A missing extension is not harmless: a web game's '.cjs' tests and new
@@ -10,11 +12,11 @@ SOURCE_ROOT = Path(__file__).resolve().parents[1]
 SUFFIXES = {'.py', '.pyi', '.md', '.txt', '.toml', '.yaml', '.yml', '.json', '.js', '.cjs', '.mjs', '.ts', '.tsx', '.jsx', '.vue',
             '.html', '.css', '.scss', '.sql', '.rs', '.go', '.java', '.kt', '.swift', '.c', '.h', '.cpp', '.cs', '.gradle', '.xml',
             '.ini', '.cfg', '.csv', '.bat', '.cmd', '.sh', '.ps1', '.svg', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.ico',
-            '.mq5', '.mqh', '.mq4', '.set'}
+            '.mq5', '.mqh', '.mq4', '.set'} | ENGINE_SUFFIXES
 
 def git(root, *args, env=None):
     p = subprocess.run(['git', *args], cwd=str(root), env=env, input='', capture_output=True,
-                       text=True, encoding='utf-8', errors='replace', timeout=30)
+                       text=True, encoding='utf-8', errors='replace', timeout=30, **hidden_console())
     if p.returncode: raise ValueError(p.stderr.strip())
     return p.stdout.strip()
 
@@ -47,15 +49,19 @@ def snapshot(root):
     # Intent-to-add entries (git add -N, which the Director uses so run diffs show new files) are neither untracked
     # nor cached-added; without this a milestone's new files would be lost when the next milestone builds on it.
     others += git(root, '-c', 'core.quotepath=false', 'diff', 'HEAD', '--name-only', '--diff-filter=A', '-z').split('\0')
-    safe = []
+    safe, new_bytes = [], 0
     for rel in dict.fromkeys(filter(None, others)):
         p = Path(rel)
-        if any(x.lower() in {'.director_worktrees', '.venv', 'venv', 'node_modules', '__pycache__', '.claude', '.agents', '.git'} for x in p.parts): continue
-        if any(any(x in part.lower() for x in ('secret', 'credential', 'token', '.env', 'private_key')) for part in p.parts): continue
+        if excluded_source_path(p): continue
         target = root / p
         if not target.exists(): continue
         if target.is_symlink() or root not in target.resolve().parents: raise ValueError('Snapshot escapes project: ' + rel)
-        if p.suffix.lower() in SUFFIXES and target.stat().st_size <= 2_000_000: safe.append(rel)
+        if p.suffix.lower() in SUFFIXES or p.name in {'.gitignore', '.gitattributes', '.editorconfig'}:
+            size = target.stat().st_size
+            new_bytes += size
+            if size > MAX_NEW_FILE_BYTES or new_bytes > MAX_NEW_SNAPSHOT_BYTES:
+                raise ValueError('SNAPSHOT_ASSET_LIMIT: 새 파일이 스냅샷 상한을 넘었습니다. 큰 에셋을 Git에 먼저 커밋하세요: ' + rel)
+            safe.append(rel)
     with tempfile.TemporaryDirectory(prefix='director-index-') as tmp:
         env = identity(); env['GIT_INDEX_FILE'] = str(Path(tmp) / 'index')
         git(root, 'read-tree', head, env=env)
@@ -101,6 +107,8 @@ def configure_runtime(config, project):
             same = False
         if same and isinstance(override, dict):
             updated.setdefault('verification', {}).update(override.get('verification') or {})
+    from core.engine_settings import override_for
+    updated.setdefault('verification', {}).update(override_for(project, SOURCE_ROOT))
     command = updated.get('verification', {}).get('test_command')
     if command == 'python -m pytest tests/':
         for rel in ('.venv/Scripts/python.exe', '.venv/bin/python'):

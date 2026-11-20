@@ -60,7 +60,7 @@ class BaseHead(ABC):
     )
 
     ORDER_SCHEMA_TEXT = (
-        '{"goal": string, "allowed_paths": string[], "protected_paths": string[], "acceptance_criteria": string[], '
+        '{"goal": string, "assigned_staff_id": string|null from captured BUILDER staff, "allowed_paths": string[], "protected_paths": string[], "acceptance_criteria": string[], '
         '"required_outputs": string[], "reference_paths": string[], "allowed_deletions": string[], '
         '"max_files_changed": integer, "max_diff_lines": integer, "context": string, '
         '"risk_level": "LOW"|"MEDIUM"|"HIGH", "requires_human_approval": false}. '
@@ -71,6 +71,8 @@ class BaseHead(ABC):
     def proxy_decide(self, question: str, evidence: Dict[str, Any], cwd: Optional[str] = None) -> Dict[str, Any]:
         """{'decision': 'APPROVE'|'ESCALATE', 'reason': str} on the user's behalf."""
         import json
+        from core import staffing
+        staffing.activate_planning((evidence.get('order') or {}).get('staff_team') if isinstance(evidence.get('order'),dict) else None)
         prompt = (self.PROXY_POLICY + "\nQUESTION:\n" + question + "\n\nEVIDENCE:\n"
                   + json.dumps(evidence, ensure_ascii=False, default=str)[:30000]
                   + '\n\nRespond ONLY with JSON: {"decision": "APPROVE" | "ESCALATE", "reason": "one sentence"}')
@@ -81,6 +83,8 @@ class BaseHead(ABC):
         """Goal-oriented step planning. Returns {'status': 'DONE'|'CONTINUE'|'BLOCKED', 'summary', 'reason',
         'order': ORDER|None}."""
         import json
+        from core import staffing
+        staffing.activate_planning(project_context.get('staff_team'))
         prompt = (
             "You are HEAD, driving a multi-step development MISSION to completion on the user's behalf.\n"
             + self.PROXY_POLICY +
@@ -100,6 +104,7 @@ class BaseHead(ABC):
             "reference_paths ONLY for absolute paths of external documents the user supplied (repo files are always "
             "given to the Builder; never list them there); "
             "risk_level HIGH only for the escalation categories, an ambitious goal is MEDIUM.\n"
+            "Before proposing code inspect existing implementation and acceptance conditions; challenge flawed assumptions with evidence and alternatives. Ask only critical missing questions; make routine reversible choices autonomously. Do not declare DONE from tests alone when runtime evidence is required. Read prior observed failures before repeating a repair.\n"
             "Before you answer, check your ORDER against itself: every file in required_outputs must be inside "
             "allowed_paths and must NOT match protected_paths (a wildcard such as data/*.json also protects a new "
             "data/x.json).\n\n"

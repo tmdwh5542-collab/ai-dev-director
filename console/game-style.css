@@ -1,0 +1,78 @@
+/* Original illustrated office + restrained mobile-RPG interface. Legacy pixel mode remains scoped out. */
+.illustrated-architecture{display:none}
+body[data-visual-mode=illustrated]{--bg:#091422;--panel:#122438;--line:#35516a;--text:#e9f1fa;--muted:#a5bace;--mint:#e1c48e;--orange:#eac38b;--game-accent:#e1c48e;--game-secondary:#8adbd3;color-scheme:dark;background:radial-gradient(ellipse at 15% 0,#223c51 0,transparent 55%),#091422;color:var(--text);font-family:Inter,'Pretendard','Noto Sans KR','Segoe UI','Malgun Gothic',sans-serif;font-size:14px}
+body[data-visual-mode=illustrated][data-office-theme=creative]{--game-accent:#8be3f0;--mint:#8be3f0;--game-secondary:#e9a3bd;background:radial-gradient(ellipse at 85% 0,#253453 0,transparent 60%),#091221}
+body[data-visual-mode=illustrated][data-office-theme=garden]{--game-accent:#b9dca8;--mint:#b9dca8;--game-secondary:#edd3a5;background:radial-gradient(ellipse at 15% 0,#23413d 0,transparent 55%),#0b1b20}
+body[data-visual-mode=illustrated] .topbar{background:#0b1928;border:0;border-bottom:1px solid #526575;box-shadow:0 6px 24px #0003;padding-block:18px;gap:20px}
+body[data-visual-mode=illustrated] .brand{color:#e5d3ad;letter-spacing:.08em}body[data-visual-mode=illustrated] .brand-mark{border-radius:12px;background:linear-gradient(145deg,#f0dfba,#a78c5c);border:1px solid #e2cda5;box-shadow:0 5px 20px #0003;color:#203443}
+body[data-visual-mode=illustrated] .brand-sub,body[data-visual-mode=illustrated] .connection,body[data-visual-mode=illustrated] .eyebrow{color:#a9bfd0}
+body[data-visual-mode=illustrated] .topbar nav{gap:18px;color:#afc3d2}body[data-visual-mode=illustrated] .topbar nav a.selected{color:var(--game-accent);border-bottom-color:var(--game-accent)}
+body[data-visual-mode=illustrated] .heading h1{color:#f5ead6;font-weight:650;letter-spacing:-.05em}body[data-visual-mode=illustrated] .heading h1 span{color:#bdccd8}body[data-visual-mode=illustrated] .heading p,body[data-visual-mode=illustrated] .muted{color:#afc2d2}
+body[data-visual-mode=illustrated] button,body[data-visual-mode=illustrated] a.primary,body[data-visual-mode=illustrated] a.secondary{font-family:inherit;border-radius:9px;box-shadow:none;transition:background-color .15s,border-color .15s}
+body[data-visual-mode=illustrated] .primary{background:linear-gradient(135deg,var(--game-accent),#c0ad86);color:#132a36;border:1px solid var(--game-accent);font-weight:750;box-shadow:0 5px 14px #0002}
+body[data-visual-mode=illustrated] .secondary,body[data-visual-mode=illustrated] .quiet{background:#203449;color:#e3eef6;border:1px solid #4e677d}body[data-visual-mode=illustrated] .secondary:hover{background:#2c455d;border-color:var(--game-accent)}
+body[data-visual-mode=illustrated] input,body[data-visual-mode=illustrated] select,body[data-visual-mode=illustrated] textarea{color:#eef4fb;background:#0d1d2d;border:1px solid #4b6378;border-radius:8px;font-family:inherit}body[data-visual-mode=illustrated] input::placeholder,body[data-visual-mode=illustrated] textarea::placeholder{color:#9baec1}
+body[data-visual-mode=illustrated] .team-field,body[data-visual-mode=illustrated] .meeting-auto,body[data-visual-mode=illustrated] .check,body[data-visual-mode=illustrated] label{color:#bfd0de}
+body[data-visual-mode=illustrated] .team-field input,body[data-visual-mode=illustrated] .team-field select,body[data-visual-mode=illustrated] .team-field textarea,body[data-visual-mode=illustrated] #office-goal{color:#eef4fb;background:#0d1d2d;border:1px solid #4b6378;border-radius:8px}
+body[data-visual-mode=illustrated] .office-panel,body[data-visual-mode=illustrated] .detail-panel,body[data-visual-mode=illustrated] .project-panel,body[data-visual-mode=illustrated] .brief-panel,body[data-visual-mode=illustrated] .ledger-panel,body[data-visual-mode=illustrated] .meetings-panel,body[data-visual-mode=illustrated] .mission-card,body[data-visual-mode=illustrated] .panel{background:linear-gradient(145deg,#1b3045,#102033);border:1px solid #476076;border-radius:16px;box-shadow:0 12px 28px #0002;color:#e7eff7}
+body[data-visual-mode=illustrated] .meetings-panel h2,body[data-visual-mode=illustrated] .panel-head h2,body[data-visual-mode=illustrated] .detail-panel h2{color:#f2e3c5;letter-spacing:-.025em}body[data-visual-mode=illustrated] .meetings-panel p{color:#bdcdd9}
+body[data-visual-mode=illustrated] .room-navigation{background:#11253a;border-block:1px solid #3d566d;color:#dfcfab}body[data-visual-mode=illustrated] .department-tabs{background:#11253a;border-color:#3d566d;gap:7px}
+body[data-visual-mode=illustrated] .department-tabs button,body[data-visual-mode=illustrated] .staff-selector button{background:#1b3249;color:#bdd0df;border:1px solid #4a647a;border-radius:8px;box-shadow:none}
+body[data-visual-mode=illustrated] .department-tabs button[aria-pressed=true],body[data-visual-mode=illustrated] .staff-selector button[aria-pressed=true]{background:#3a4851;color:#f2e5c8;border-color:var(--game-accent)}
+body[data-visual-mode=illustrated] .office-camera{background:#12263a;border-bottom:1px solid #496173;color:#bcd0df}body[data-visual-mode=illustrated] .office-camera .camera-hint{color:#aac1d4}
+body[data-visual-mode=illustrated] .scene{background:#142536;background-image:none}body[data-visual-mode=illustrated] .scene-note,body[data-visual-mode=illustrated] .staff-selector{background:#12263a;color:#bdcedc}
+body[data-visual-mode=illustrated] .company-stats{background:#152b40;border-color:#4d6272}body[data-visual-mode=illustrated] .company-stats>div{border-color:#3a5064}body[data-visual-mode=illustrated] .company-stats strong{color:var(--game-accent);font-weight:600}body[data-visual-mode=illustrated] .company-stats span,body[data-visual-mode=illustrated] .team-note{color:#b1c4d3}
+body[data-visual-mode=illustrated] .illustrated-architecture{display:inline}body[data-visual-mode=illustrated] .office-architecture,body[data-visual-mode=illustrated] #theme-decor,body[data-visual-mode=illustrated] #office-scene>.plant{display:none}
+body[data-visual-mode=illustrated] #office-scene{shape-rendering:geometricPrecision;image-rendering:auto}body[data-visual-mode=illustrated] .workstation .desk-rug{opacity:.1}body[data-visual-mode=illustrated] .workstation{filter:drop-shadow(0 5px 3px #10213144)}
+body[data-visual-mode=illustrated] .workstation .selection{stroke:var(--game-accent);stroke-width:2;fill:#aee9e80d}body[data-visual-mode=illustrated] .workstation .staff-name,body[data-visual-mode=illustrated] .avatar-label{fill:#f8f5e9;stroke:#173044;stroke-width:3;paint-order:stroke;font-size:13px;font-family:inherit;font-weight:600}
+body[data-visual-mode=illustrated] .workstation .staff-state{fill:#f7e9c7;stroke:#163348;stroke-width:2;paint-order:stroke;font-size:11px}body[data-visual-mode=illustrated] .illustrated-room-label{fill:#e4d8b6;stroke:#254453;stroke-width:3;paint-order:stroke;font-size:14px;letter-spacing:2px;font-family:inherit}
+body[data-visual-mode=illustrated] .character-speech .speech-bg{fill:#f5f1e5;stroke:#657b8b;stroke-width:1}body[data-visual-mode=illustrated] .character-speech .speech-text{fill:#28495e;font-family:inherit;font-size:12px}
+body[data-visual-mode=illustrated] .illustrated-meeting{filter:drop-shadow(2px 7px 5px #112c3c44)}body[data-visual-mode=illustrated] .illustrated-meeting .office-chair{fill:var(--chair-fill,#536d80)}
+body[data-visual-mode=illustrated] .decor-toolbar{background:#1a3045;border-bottom:1px solid #526d82}body[data-visual-mode=illustrated] .decor-toolbar p{color:#c2d3e0}body[data-visual-mode=illustrated] .decor-zone{fill:#e9ce9b;stroke:#f1dfb6;stroke-opacity:.45;fill-opacity:.06}
+body[data-visual-mode=illustrated] .decor-item{filter:drop-shadow(2px 5px 3px #1a344650)}body[data-visual-mode=illustrated] .decor-item .furniture-selection{stroke:#4abbbb}
+body[data-visual-mode=illustrated] .department-portrait{height:250px;max-height:30vh;background:radial-gradient(ellipse at 50% 35%,#39586d,#132638 75%);border-bottom:1px solid #536575;border-radius:12px 12px 0 0;overflow:hidden}body[data-visual-mode=illustrated] .department-fields dt{color:#a9bdce}body[data-visual-mode=illustrated] .department-fields dd{color:#eff4f9}
+body[data-visual-mode=illustrated] dialog,body[data-visual-mode=illustrated] #team-dialog,body[data-visual-mode=illustrated] #company-dialog,body[data-visual-mode=illustrated] #meeting-report-dialog{background:#12263a;color:#edf3f8;border:1px solid #73808a;border-radius:18px;box-shadow:0 24px 80px #0008}body[data-visual-mode=illustrated] dialog::backdrop{background:#07111ee8}
+body[data-visual-mode=illustrated] .theme-card,body[data-visual-mode=illustrated] .character-style-gallery button,body[data-visual-mode=illustrated] .team-member,body[data-visual-mode=illustrated] .ai-connection-card,body[data-visual-mode=illustrated] .skill-card,body[data-visual-mode=illustrated] .auto-card,body[data-visual-mode=illustrated] .agenda-card{background:#1a334a;color:#e3eef6;border:1px solid #536c80;border-radius:12px;box-shadow:none}
+body[data-visual-mode=illustrated] .theme-card[aria-pressed=true],body[data-visual-mode=illustrated] .character-style-gallery button[aria-pressed=true]{border-color:var(--game-accent);box-shadow:0 0 0 2px #d9bd8240}body[data-visual-mode=illustrated] .theme-card small,body[data-visual-mode=illustrated] .style-gallery-heading,body[data-visual-mode=illustrated] .visual-mode-note{color:#b1c8d8}body[data-visual-mode=illustrated] .theme-card strong{color:#e9d9b9}
+body[data-visual-mode=illustrated] .theme-thumbnail{height:112px;background:url('/office-corporate-hd.png?v=1') center/cover;border-radius:8px 8px 0 0;image-rendering:auto}body[data-visual-mode=illustrated] [data-theme=creative] .theme-thumbnail{background-image:url('/office-creative-hd.png?v=1')}body[data-visual-mode=illustrated] [data-theme=garden] .theme-thumbnail{background-image:url('/office-garden-hd.png?v=1')}
+body[data-visual-mode=illustrated] .style-thumb,body[data-visual-mode=illustrated] #owner-preview{background:radial-gradient(ellipse at center,#3b566d,#152b40);border-color:#506e83;image-rendering:auto;border-radius:10px}body[data-visual-mode=illustrated] .style-thumb svg{image-rendering:auto}
+body[data-visual-mode=illustrated] .status-pill,body[data-visual-mode=illustrated] .live-chip{background:#233e52;color:#c8e8dc;border:1px solid #608c83;border-radius:99px}body[data-visual-mode=illustrated] .error,body[data-visual-mode=illustrated] [role=alert]{color:#ffd0b6}
+body[data-visual-mode=illustrated] .hd-leg-left,body[data-visual-mode=illustrated] .hd-leg-right{transform-origin:110px 265px;transform-box:view-box}body[data-visual-mode=illustrated] .office-character[data-moving=true] .hd-leg-left{animation:illustrated-step .42s ease-in-out alternate infinite}body[data-visual-mode=illustrated] .office-character[data-moving=true] .hd-leg-right{animation:illustrated-step .42s ease-in-out alternate-reverse infinite}
+body[data-visual-mode=illustrated] .office-character[data-moving=true] .illustrated-avatar{animation:illustrated-bob .42s ease-in-out alternate infinite}
+@keyframes illustrated-step{from{transform:rotate(-1.4deg) translateY(-1px)}to{transform:rotate(1.4deg) translateY(1px)}}@keyframes illustrated-bob{from{transform:translateY(0)}to{transform:translateY(-1.5px)}}
+@media(prefers-reduced-motion:reduce){body[data-visual-mode=illustrated] .office-character *,body[data-visual-mode=illustrated] button{animation:none!important;transition:none!important}}
+@media(max-width:780px){body[data-visual-mode=illustrated] .topbar{padding:14px 16px;gap:12px}body[data-visual-mode=illustrated] .topbar nav{gap:12px}body[data-visual-mode=illustrated] .department-portrait{height:200px;max-height:none}body[data-visual-mode=illustrated] .theme-thumbnail{height:80px}}
+
+/* Keep names legible over painted floors and leave the full illustrated head unobstructed. */
+.avatar-nameplate,.desk-nametag{display:none}
+body[data-visual-mode=illustrated] .office-panel>.panel-head{background:#152b3e;border-bottom:1px solid #456075}
+body[data-visual-mode=illustrated] .scene #office-scene{width:100%;height:auto;aspect-ratio:1080/680;min-height:0;max-height:none}
+body[data-visual-mode=illustrated] .character-speech{transform:translateY(-42px)}
+body[data-visual-mode=illustrated] .avatar-nameplate,body[data-visual-mode=illustrated] .desk-nametag{display:inline;fill:#122e43;fill-opacity:.88;stroke:#a5b8c3;stroke-width:.7}
+body[data-visual-mode=illustrated] .workstation .staff-name,body[data-visual-mode=illustrated] .avatar-label{stroke:none;fill:#f4f5ef;font-size:13px}
+body[data-visual-mode=illustrated] .workstation .staff-state{stroke:none;fill:#c7dbe5;font-size:10px}
+body[data-visual-mode=illustrated] .office-character[data-at-desk=true][data-moving=false] .character-nameplate{visibility:hidden}
+body[data-visual-mode=illustrated] .workstation .staff-name,body[data-visual-mode=illustrated] .workstation .staff-state{display:inline}
+body[data-visual-mode=illustrated] .staff-member .station-caption{transform:translate(0px,145px)}
+body[data-visual-mode=illustrated] .project-panel h3{color:#f0e4cd}
+body[data-visual-mode=illustrated] #mission-goal{color:#bfd0dc}
+body[data-visual-mode=illustrated] .path,body[data-visual-mode=illustrated] .role-note{color:#adc3d3}
+body[data-visual-mode=illustrated] .text-link{color:var(--game-accent)}
+body[data-visual-mode=illustrated] .mission-badge{background:#28494d;color:#c5eee2;border:1px solid #5b837f;border-radius:99px}
+body[data-visual-mode=illustrated] .department-detail{color:#bfd2e1;background:#0e2032;border:1px solid #4b647a;border-radius:10px}
+
+/* Furniture artwork shares the room camera and light; floor footprints stay editable. */
+.workstation-hd-art,.decor-hd-art{display:none}.furniture-sprite{pointer-events:none}.decor-hitbox{pointer-events:none}
+body[data-visual-mode=illustrated] .workstation-classic-art,body[data-visual-mode=illustrated] .decor-classic-art{display:none}
+body[data-visual-mode=illustrated] .workstation-hd-art,body[data-visual-mode=illustrated] .decor-hd-art{display:inline}
+body[data-visual-mode=illustrated] .decor-editing .decor-hitbox{pointer-events:all}
+
+body[data-visual-mode=illustrated] .illustrated-meeting{filter:none}
+
+/* Keep actor state while pausing off-camera/offscreen animation and raster work. */
+#office-scene .office-character[data-in-camera=false]{visibility:hidden}
+#office-scene[data-scene-visible=false] *,#office-scene[data-tab-visible=false] *,#office-scene .office-character[data-in-camera=false] *{animation-play-state:paused!important}
+
+#scene{position:relative}#office-gpu{position:absolute;left:0;top:0;pointer-events:none;z-index:2}#scene[data-renderer=pixi] #office-scene{position:relative;z-index:1}#scene[data-renderer=pixi] .office-character .illustrated-avatar{opacity:0}#scene[data-renderer=svg] #office-gpu{display:none}
+
+#scene[data-renderer=pixi] .illustrated-avatar *{animation-play-state:paused!important}
