@@ -18,7 +18,7 @@ window.OfficeCompany=function({readJSON,onSaved}){
  async function open(){
   if(saving)return;
   try{apply(await request('/ops/company'));const owner=state.company?.owner;theme=state.company?.room_themes?.[window.OfficeRoom||'ceo']||state.company?.theme||'corporate';$('theme-scope').value=state.company?'room':'all';
-   $('visual-mode').value=state.company?.visual_mode||'illustrated';$('auto-meetings').checked=state.company?!!state.company.auto_meetings:true;$('owner-name').value=owner?.name||'';$('owner-gender').value=owner?.character.gender||'male';$('owner-age').value=owner?.character.age||30;$('owner-color').value=owner?.character.color||'gold';
+   $('visual-mode').value=state.company?.visual_mode||'cozy';$('auto-meetings').checked=state.company?!!state.company.auto_meetings:true;$('owner-name').value=owner?.name||'';$('owner-gender').value=owner?.character.gender||'male';$('owner-age').value=owner?.character.age||30;$('owner-color').value=owner?.character.color||'gold';
    $('company-title').textContent=owner?'대표 캐릭터 · 사무실 설정':'대표 캐릭터를 만들어주세요';$('company-save').textContent=owner?'회사 설정 저장':'회사 시작하기';
    $('company-close').hidden=!owner;$('company-intro').textContent=state.existing_team?'저장된 직원 구성을 유지하며 대표와 사무실을 설정합니다.':'대표 한 명으로 회사를 시작합니다. 그다음 필요한 직원을 직접 만들고 채용하세요.';
    $('company-save-note').textContent='이 PC에 저장됩니다. 같은 회사의 프로젝트에 공통으로 적용됩니다.';
@@ -50,9 +50,9 @@ window.OfficeScene=function({select,getRoute}){
   if(Math.abs(actor.x-x)>120&&Math.abs(actor.y-y)>45)actor.path.push([540,400]);
   actor.path.push([x,y]);if(reduce.matches){actor.x=x;actor.y=y;actor.path=[];place(actor);}else start();
  }
- function place(a){const view=svg.viewBox.baseVal,visible=a.x+80>=view.x&&a.x-80<=view.x+view.width&&a.y+50>=view.y&&a.y-160<=view.y+view.height;a.node.dataset.inCamera=String(visible);if(!visible){metrics.culled++;return;}metrics.transformWrites++;a.node.dataset.atDesk=String(Math.hypot(a.x-a.rest[0],a.y-a.rest[1])<45);a.node.setAttribute('transform',`translate(${a.x.toFixed(1)} ${a.y.toFixed(1)}) scale(${a.home.meetingSeat && window.GameVisuals?.mode()==='illustrated' ? .52 : .78})`);a.node.dataset.moving=String(a.path.length>0);}
+ function place(a){window.OfficeCozy?.pose(a,a.dx||0,a.dy||0,a.path.length>0);const view=svg.viewBox.baseVal,visible=a.x+80>=view.x&&a.x-80<=view.x+view.width&&a.y+50>=view.y&&a.y-160<=view.y+view.height;a.node.dataset.inCamera=String(visible);if(!visible){metrics.culled++;return;}metrics.transformWrites++;a.node.dataset.atDesk=String(Math.hypot(a.x-a.rest[0],a.y-a.rest[1])<45);a.node.setAttribute('transform',`translate(${a.x.toFixed(1)} ${a.y.toFixed(1)}) scale(${a.home.meetingSeat && window.GameVisuals?.mode()==='illustrated' ? .52 : .78})`);a.node.dataset.moving=String(a.path.length>0);}
  function tick(now){frame=null;if(document.hidden||!sceneVisible||!connected||!enabled||window.OfficeDecorEditing){last=0;return;}if(last&&now-last<32){frame=requestAnimationFrame(tick);return;}const begun=performance.now();metrics.frames++;const dt=Math.min((now-(last||now))/1000,.08);last=now;let moving=false;
-  for(const a of actors.values())if(a.path.length){const [x,y]=a.path[0],dx=x-a.x,dy=y-a.y,d=Math.hypot(dx,dy),step=100*dt;if(d<=step||d<1){a.x=x;a.y=y;a.path.shift();}else{a.x+=dx/d*step;a.y+=dy/d*step;}place(a);moving ||=a.path.length>0;}
+  for(const a of actors.values())if(a.path.length){const [x,y]=a.path[0],dx=x-a.x,dy=y-a.y,d=Math.hypot(dx,dy),step=100*dt;a.dx=dx;a.dy=dy;a.distance=(a.distance||0)+Math.min(d,step);if(d<=step||d<1){a.x=x;a.y=y;a.path.shift();}else{a.x+=dx/d*step;a.y+=dy/d*step;}place(a);moving ||=a.path.length>0;}
   // Foot position determines the character overlap order.
   const focused=document.activeElement;let movedFocus=false;
   [...actors.values()].sort((a,b)=>a.y-b.y).forEach((a,index)=>{if(host.children[index]!==a.node){movedFocus ||= a.node===focused;host.insertBefore(a.node,host.children[index]||null);}});
@@ -78,7 +78,7 @@ window.OfficeScene=function({select,getRoute}){
 
  }
  function sync(depts,owner,getWorker,isConnected,approval,companyTheme,deliveries=[]){
-  connected=isConnected;enabled=!!owner;const artKey=companyTheme||'corporate',plate=document.getElementById('illustrated-office-image'),src='/office-'+artKey+'-hd.png?v=1';if((document.body.dataset.visualMode||'illustrated')==='illustrated'){if(plate?.getAttribute('href')!==src)plate?.setAttribute('href',src);}else plate?.removeAttribute('href');decorate(artKey);
+  connected=isConnected;enabled=!!owner;const artKey=companyTheme||'corporate';window.OfficeCozy?.paint(window.OfficeRoom||'ceo',artKey);const plate=document.getElementById('illustrated-office-image'),src='/office-'+artKey+'-hd.png?v=1';if((document.body.dataset.visualMode||'illustrated')==='illustrated'){if(plate?.getAttribute('href')!==src)plate?.setAttribute('href',src);}else plate?.removeAttribute('href');decorate(artKey);
   const keys=new Set(Object.keys(depts).filter(k=>k!=='DIRECTOR'&&enabled));for(const [key,a] of actors)if(!keys.has(key)){a.node.remove();actors.delete(key);}
   let index=0;for(const key of keys){const d=depts[key],profile=key==='CEO'?owner:{name:d.name,character:d.character||{gender:'male',age:30,color:'mint'}},signature=JSON.stringify(profile)+(document.body.dataset.visualMode||'illustrated');let a=actors.get(key);
    if(!a||a.signature!==signature||a.home.x!==d.x||a.home.y!==d.y){a?.node.remove();a=create(key,profile,d,index);actors.set(key,a);}if(key!=='CEO')index++;

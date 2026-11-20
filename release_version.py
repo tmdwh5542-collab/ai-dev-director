@@ -1,3 +1,3 @@
 """Version of this source release; publisher increments before signing a new release."""
-VERSION='2026.11.20.3'
+VERSION='2026.11.20.4'
 UPDATER_PROTOCOL=1

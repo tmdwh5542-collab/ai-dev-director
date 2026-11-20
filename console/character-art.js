@@ -35,7 +35,7 @@ window.OfficeCharacters=(()=>{
   g.innerHTML=`<ellipse cx="0" cy="2" rx="24" ry="7" fill="#081525" opacity=".28"/><svg x="-38" y="-138" width="76" height="138" viewBox="0 0 220 404" overflow="visible" aria-hidden="true"><defs><clipPath id="${id}-top"><rect width="220" height="270"/></clipPath><clipPath id="${id}-left"><rect y="265" width="110" height="139"/></clipPath><clipPath id="${id}-right"><rect x="110" y="265" width="110" height="139"/></clipPath></defs><g class="hd-leg-left"><g clip-path="url(#${id}-left)">${image}</g></g><g class="hd-leg-right"><g clip-path="url(#${id}-right)">${image}</g></g><g clip-path="url(#${id}-top)">${image}</g></svg>`;
   return g;
  }
- function avatar(character={}){return (window.GameVisuals?.mode()||document.body.dataset.visualMode||'illustrated')==='pixel'?pixelAvatar(character):illustratedAvatar(character);}
+ function avatar(character={}){if(window.GameVisuals?.mode()==='cozy')return window.OfficeCozy.avatar(character);return (window.GameVisuals?.mode()||document.body.dataset.visualMode||'illustrated')==='pixel'?pixelAvatar(character):illustratedAvatar(character);}
  function vectorPortrait(character={}){
   const p=palette(character),female=character.gender==='female',s=svg();s.setAttribute('viewBox','0 0 240 240');s.setAttribute('aria-hidden','true');s.classList.add('crew-portrait-svg');
   const back=female?`<path d="M69 54L89 23L135 15L169 31L186 70L181 119L196 181L157 201L85 183L56 144L66 103Z" fill="${p.hair}" stroke="#292735" stroke-width="3"/>`:`<path d="M73 57L83 30L116 15L153 23L175 46L181 82L168 120L80 122L62 90Z" fill="${p.hair}" stroke="#292735" stroke-width="3"/>`;
@@ -55,6 +55,7 @@ window.OfficeCharacters=(()=>{
   return s;
  }
  function portrait(character={}){
+  if(window.GameVisuals?.mode()==='cozy')return window.OfficeCozy.portrait(character);
   const s=svg();s.setAttribute('viewBox','0 0 240 240');s.setAttribute('aria-hidden','true');s.classList.add('crew-portrait-svg');
   const keys=['mint','blue','violet','coral','gold'],column=Math.max(0,keys.indexOf(character.color)),row=character.gender==='female'?1:0;
   const cell=svg();cell.setAttribute('x','0');cell.setAttribute('y','0');cell.setAttribute('width','240');cell.setAttribute('height','240');cell.setAttribute('viewBox',`${column*1983/5} ${row*793/2} 396.6 396.5`);cell.setAttribute('preserveAspectRatio','xMidYMid slice');

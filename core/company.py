@@ -6,9 +6,9 @@ import json
 from core import staffing
 
 THEMES = {
- 'corporate': {'name': '대기업 본사', 'description': '도시 전망 · 통유리 · 화이트 데스크'},
- 'creative': {'name': '자유로운 스튜디오', 'description': '모던 우드 · 협업 보드 · 라운지'},
- 'garden': {'name': '그린 오피스', 'description': '밝은 바닥 · 플랜트 월 · 유리 회의실'},
+ 'corporate': {'name': '대기업 본사', 'description': '차분한 업무 공간 · 정돈된 책상'},
+ 'creative': {'name': '자유로운 스튜디오', 'description': '자유로운 협업 공간 · 우드 가구'},
+ 'garden': {'name': '그린 오피스', 'description': '초록 식물 · 밝은 바닥 · 편안한 분위기'},
 }
 COLORS = {'mint': '#89dfca', 'blue': '#89bfff', 'violet': '#c5b1ff', 'coral': '#f4a49a', 'gold': '#e5c58e'}
 
@@ -36,7 +36,7 @@ def validate(value):
         raise ValueError('사무실 배경을 선택하세요.')
     if 'auto_meetings' in value and type(value['auto_meetings']) is not bool:
         raise ValueError('자동 회의 설정을 확인하세요.')
-    if 'visual_mode' in value and value['visual_mode'] not in ('illustrated','pixel'):raise ValueError('고해상도 2D 또는 픽셀 그래픽을 선택하세요.')
+    if 'visual_mode' in value and value['visual_mode'] not in ('cozy','illustrated','pixel'):raise ValueError('코지 픽셀, 고해상도 2D 또는 클래식 픽셀 그래픽을 선택하세요.')
     rooms = value.get('room_themes', {})
     if not isinstance(rooms, dict) or any(k not in {'ceo', *staffing.DEPARTMENTS} or v not in THEMES for k,v in rooms.items()):
         raise ValueError('사무실별 배경 설정을 확인하세요.')
@@ -49,6 +49,9 @@ def current():
     path = staffing.settings_path()
     stored = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
     company = validate(stored['company']) if stored.get('company') is not None else None
+    # Upgrade only the presentation of pre-cozy saves; leave their on-disk staff/work untouched.
+    if company is not None and stored.get('office_art_revision', 0) < 2:
+        company = {**company, 'visual_mode': 'cozy'}
     revision = hashlib.sha256(json.dumps(company, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:20]
     return {'company': company, 'revision': revision, 'existing_team': bool(stored.get('members')), 'themes': THEMES, 'colors': COLORS}
 
@@ -61,6 +64,7 @@ def save(value, expected_revision):
         path = staffing.settings_path()
         stored = json.loads(path.read_text(encoding='utf-8')) if path.exists() else staffing.validate({'members': []}, require_ready=False)
         stored['company'] = company
+        stored['office_art_revision'] = 2
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_suffix('.tmp')
         temporary.write_text(json.dumps(stored, ensure_ascii=False, indent=2), encoding='utf-8')

@@ -1,0 +1,60 @@
+/* Original cozy office: one orthogonal tile camera for people, furniture and walls. */
+#cozy-architecture,.workstation-cozy-art,.decor-cozy-art{display:none}
+body[data-visual-mode=cozy]{--bg:#efe4c8;--panel:#fff4d9;--line:#ba9a6e;--text:#4a3a32;--muted:#79644f;--mint:#4f8063;--orange:#ae643d;--game-accent:#4f8063;background:#e8d9b8;color:#4a3a32;color-scheme:light;font-family:'Segoe UI','Malgun Gothic',sans-serif}
+body[data-visual-mode=cozy] .illustrated-architecture,body[data-visual-mode=cozy] .office-architecture,body[data-visual-mode=cozy] .workstation-classic-art,body[data-visual-mode=cozy] .workstation-hd-art,body[data-visual-mode=cozy] .decor-classic-art,body[data-visual-mode=cozy] .decor-hd-art{display:none!important}
+body[data-visual-mode=cozy] #cozy-architecture,body[data-visual-mode=cozy] .workstation-cozy-art,body[data-visual-mode=cozy] .decor-cozy-art{display:inline}
+body[data-visual-mode=cozy] .scene{background:#bba176;border-block:3px solid #795a42}
+body[data-visual-mode=cozy] .scene #office-scene{width:100%;height:auto;min-height:0;max-height:none;aspect-ratio:1080/680;image-rendering:pixelated}
+body[data-visual-mode=cozy] .office-panel,body[data-visual-mode=cozy] .detail-panel,body[data-visual-mode=cozy] .project-panel,body[data-visual-mode=cozy] .meetings-panel{border:2px solid #9c7a53;border-radius:8px;background:#fff3d8;box-shadow:0 4px 0 #c9ad7c}
+body[data-visual-mode=cozy] .office-panel>.panel-head,body[data-visual-mode=cozy] .staff-selector{background:#e9d8ae;border-color:#b99b6b}
+body[data-visual-mode=cozy] .topbar,body[data-visual-mode=cozy] .room-navigation,body[data-visual-mode=cozy] .department-tabs{background:#f7eacb;border-color:#b89a6b}
+body[data-visual-mode=cozy] .primary{background:#6d9166;color:#fff6dc;border:2px solid #486b4c;border-radius:5px;box-shadow:0 3px 0 #405e42}
+body[data-visual-mode=cozy] .secondary,body[data-visual-mode=cozy] .quiet,body[data-visual-mode=cozy] .department-tabs button,body[data-visual-mode=cozy] .staff-selector button{background:#fff6de;color:#5c4633;border:1px solid #a18157;border-radius:5px}
+body[data-visual-mode=cozy] .department-tabs button[aria-pressed=true],body[data-visual-mode=cozy] .staff-selector button[aria-pressed=true]{background:#70916b;color:#fff4d9;border-color:#496848}
+body[data-visual-mode=cozy] .scene-note,body[data-visual-mode=cozy] .muted{color:#715a43}
+body[data-visual-mode=cozy] .character-speech{transform:translateY(42px)}
+body[data-visual-mode=cozy] .character-speech .speech-bg{fill:#fff1cf;stroke:#8e704e;stroke-width:1}
+body[data-visual-mode=cozy] .character-speech .speech-text{fill:#644c35;font-size:11px}
+body[data-visual-mode=cozy] .avatar-nameplate,body[data-visual-mode=cozy] .desk-nametag{display:inline;fill:#fff0ca;stroke:#977953;stroke-width:1}
+body[data-visual-mode=cozy] .avatar-label,body[data-visual-mode=cozy] .workstation .staff-name{fill:#4b3b2e;stroke:none;font-size:13px}
+body[data-visual-mode=cozy] .workstation .staff-state{fill:#6a6545;stroke:none;font-size:10px}
+body[data-visual-mode=cozy] .staff-member .station-caption{transform:translate(0,145px)}
+body[data-visual-mode=cozy] .office-character[data-at-desk=true] .character-nameplate{visibility:hidden}
+body[data-visual-mode=cozy] .office-character[data-state=meeting]:focus .character-nameplate{visibility:visible}
+body[data-visual-mode=cozy] .cozy-avatar,body[data-visual-mode=cozy] .cozy-avatar *{animation:none!important;transition:none!important}
+.cozy-walk-frame{display:none}
+.cozy-avatar[data-direction=down][data-frame="0"] .cozy-walk-frame[data-direction=down][data-frame="0"]{display:inline}
+.cozy-avatar[data-direction=down][data-frame="1"] .cozy-walk-frame[data-direction=down][data-frame="1"]{display:inline}
+.cozy-avatar[data-direction=down][data-frame="2"] .cozy-walk-frame[data-direction=down][data-frame="2"]{display:inline}
+.cozy-avatar[data-direction=down][data-frame="3"] .cozy-walk-frame[data-direction=down][data-frame="3"]{display:inline}
+.cozy-avatar[data-direction=down][data-frame="4"] .cozy-walk-frame[data-direction=down][data-frame="4"]{display:inline}
+.cozy-avatar[data-direction=down][data-frame="5"] .cozy-walk-frame[data-direction=down][data-frame="5"]{display:inline}
+.cozy-avatar[data-direction=up][data-frame="0"] .cozy-walk-frame[data-direction=up][data-frame="0"]{display:inline}
+.cozy-avatar[data-direction=up][data-frame="1"] .cozy-walk-frame[data-direction=up][data-frame="1"]{display:inline}
+.cozy-avatar[data-direction=up][data-frame="2"] .cozy-walk-frame[data-direction=up][data-frame="2"]{display:inline}
+.cozy-avatar[data-direction=up][data-frame="3"] .cozy-walk-frame[data-direction=up][data-frame="3"]{display:inline}
+.cozy-avatar[data-direction=up][data-frame="4"] .cozy-walk-frame[data-direction=up][data-frame="4"]{display:inline}
+.cozy-avatar[data-direction=up][data-frame="5"] .cozy-walk-frame[data-direction=up][data-frame="5"]{display:inline}
+.cozy-avatar[data-direction=left][data-frame="0"] .cozy-walk-frame[data-direction=left][data-frame="0"]{display:inline}
+.cozy-avatar[data-direction=left][data-frame="1"] .cozy-walk-frame[data-direction=left][data-frame="1"]{display:inline}
+.cozy-avatar[data-direction=left][data-frame="2"] .cozy-walk-frame[data-direction=left][data-frame="2"]{display:inline}
+.cozy-avatar[data-direction=left][data-frame="3"] .cozy-walk-frame[data-direction=left][data-frame="3"]{display:inline}
+.cozy-avatar[data-direction=left][data-frame="4"] .cozy-walk-frame[data-direction=left][data-frame="4"]{display:inline}
+.cozy-avatar[data-direction=left][data-frame="5"] .cozy-walk-frame[data-direction=left][data-frame="5"]{display:inline}
+.cozy-avatar[data-direction=right][data-frame="0"] .cozy-walk-frame[data-direction=right][data-frame="0"]{display:inline}
+.cozy-avatar[data-direction=right][data-frame="1"] .cozy-walk-frame[data-direction=right][data-frame="1"]{display:inline}
+.cozy-avatar[data-direction=right][data-frame="2"] .cozy-walk-frame[data-direction=right][data-frame="2"]{display:inline}
+.cozy-avatar[data-direction=right][data-frame="3"] .cozy-walk-frame[data-direction=right][data-frame="3"]{display:inline}
+.cozy-avatar[data-direction=right][data-frame="4"] .cozy-walk-frame[data-direction=right][data-frame="4"]{display:inline}
+.cozy-avatar[data-direction=right][data-frame="5"] .cozy-walk-frame[data-direction=right][data-frame="5"]{display:inline}
+body[data-visual-mode=cozy] .theme-thumbnail{background:repeating-linear-gradient(0deg,#cda36f 0 12px,#b78d5b 12px 14px);border:4px solid #76543c;image-rendering:pixelated}
+body[data-visual-mode=cozy] .cozy-portrait{image-rendering:pixelated;background:#ead7af}
+body[data-visual-mode=cozy] .department-portrait,body[data-visual-mode=cozy] #owner-preview{background:#d6dfb6;border-color:#9b7e50}
+body[data-visual-mode=cozy] .workstation .selection{stroke:#79935b;stroke-width:2;fill:#d5db9e;fill-opacity:.15}
+body[data-visual-mode=cozy] .workstation:not(.selected) .selection{opacity:0}
+
+body[data-visual-mode=cozy] #theme-decor,body[data-visual-mode=cozy] #office-scene>.plant{display:none}
+body[data-visual-mode=cozy] .workstation .staff-name,body[data-visual-mode=cozy] .workstation .staff-state{display:inline}
+
+body[data-visual-mode=cozy] #staff-routes{display:none}
+body[data-visual-mode=cozy] .room-navigation{color:#654c35}
