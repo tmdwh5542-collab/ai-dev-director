@@ -1,0 +1,14 @@
+{
+  "payload": {
+    "app": "ai-dev-director",
+    "format": 1,
+    "repository": "tmdwh5542-collab/ai-dev-director",
+    "version": "2026.11.23.2",
+    "min_updater": 1,
+    "archive_url": "https://github.com/tmdwh5542-collab/ai-dev-director/releases/download/v2026.11.23.2/AI-DEV-DIRECTOR-Windows-2026.11.23.2.zip",
+    "archive_sha256": "115a9697f9a47daec3e4a82de02193416af6008578411ebb30f802f61c458e8d",
+    "archive_bytes": 29583761,
+    "release_notes": "# AI DEV DIRECTOR 2026.11.23.2 — 업무 지시·기록 위치 개선\n\n회사 사무실의 업무 지시창과 최근 업무 기록을 캐릭터 회사 화면 바로 아래로 옮겼습니다. PC에서는 두 패널을 나란히, 모바일에서는 업무 지시 → 최근 업무 기록 순서로 보여줍니다. 모바일의 직원 상세·프로젝트 정보는 그 다음에 표시되며 Hermes·임원회의·부서 회의는 아래로 내려갑니다.\n\n기존 업무 입력, 미션 센터 이동, 기록 갱신과 저장 데이터는 유지합니다. 이전 버전의 직원·팀 추천과 외형 프리셋도 포함합니다.\n\n업데이트 확인 → 새 버전 확인 → 다운로드·검증 → 백업 후 적용·재시작으로 적용하세요. 설치 목록 누락으로 최초 전체 설치 필요가 표시되는 이전 설치본은 앱을 종료한 뒤 전체 설치본으로 한 번 재설치해야 합니다. 기존 설치 폴더는 지우지 마세요.\n\n격리된 가상 회사의 PC·태블릿·390px 모바일 화면에서 패널 순서·줄바꿈·가로 넘침과 업무 지시서의 미션 센터 전달을 확인합니다. Windows 실기기 설치는 별도 환경 검증 대상입니다.\n"
+  },
+  "signature": "a/jeHCZWQRKrC2YNvtYL09wTYbk7fVm/cOX5RLBEtTPEVh/eKBNudCTROiWpFKVcblwWhB+tyvpagRDNN+zzAQ=="
+}
