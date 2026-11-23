@@ -550,6 +550,27 @@ class CompanionHandler(d.DashboardHandler):
                 return self._send_json({'error': str(exc)}, 400)
             except OSError:
                 return self._send_json({'error': '회사 설정을 저장하지 못했습니다.'}, 500)
+        if self.path == '/ops/team/recommendations':
+            if not d.is_request_origin_allowed(self.headers, self.server.server_address[1])[0] or not self.authorized():
+                return self._send_json({'error': 'local authenticated request required'}, 403)
+            from core import staffing, team_recommendations
+            from core.mission import MissionStore
+            try:
+                size = int(self.headers.get('Content-Length') or 0)
+                if not 0 < size <= 64000 or self.headers.get('Content-Type', '').split(';')[0] != 'application/json':
+                    raise ValueError('직원 추천 요청 형식을 확인하세요.')
+                payload = json.loads(self.rfile.read(size))
+                if not isinstance(payload, dict) or set(payload) - {'team', 'expected_revision', 'goal', 'project_path'}:
+                    raise ValueError('직원 추천 요청을 확인하세요.')
+                if payload.get('expected_revision') != staffing.current()['revision']:
+                    raise staffing.TeamConflict('다른 창에서 직원 구성이 변경됐습니다. 다시 불러온 뒤 추천받으세요.')
+                return self._send_json(team_recommendations.recommend(payload.get('team'), MissionStore().all(), payload.get('goal', ''), payload.get('project_path', '')))
+            except staffing.TeamConflict as exc:
+                return self._send_json({'error': str(exc)}, 409)
+            except (ValueError, TypeError) as exc:
+                return self._send_json({'error': str(exc)}, 400)
+            except OSError:
+                return self._send_json({'error': '현재 직원·업무를 읽지 못했습니다. 잠시 후 다시 시도하세요.'}, 503)
         if self.path == '/ops/team':
             if not d.is_request_origin_allowed(self.headers, self.server.server_address[1])[0] or not self.authorized():
                 return self._send_json({'error': 'local authenticated request required'}, 403)

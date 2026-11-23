@@ -189,7 +189,7 @@ const hermes=window.OfficeHermes({readJSON:json,onChange:()=>poll()});
 const executive=window.OfficeExecutive({readJSON:json,getProject:()=>data?.status?.project_path,onChange:()=>poll()});
 const companyEditor=window.OfficeCompany({readJSON:json,onSaved:(state,message)=>{if(state){if(data)data.company=state;teamRevision=null;poll();}else{$('office-error').hidden=false;text('office-error',message);}}});
 for(const role of Object.keys(DEPTS))createStation(role);select('CEO');
-const editor=window.OfficeTeamEditor({readJSON:json,onSaved:(team,message)=>{if(team){if(data)data.team.team=team;poll();}else{$('office-error').hidden=false;text('office-error',message);}}});
+const editor=window.OfficeTeamEditor({readJSON:json,getProject:()=>data?.status?.project_path,onSaved:(team,message)=>{if(team){if(data)data.team.team=team;poll();}else{$('office-error').hidden=false;text('office-error',message);}}});
 $('team-edit').onclick=()=>{if(!data?.company?.company){companyEditor.open();return;}editor.open();};
 $('company-edit').onclick=companyEditor.open;
 $('refresh').onclick=()=>{if(stopped){location.reload();return;}poll();};$('stop-missions').onclick=()=>control('stop-missions');$('shutdown').onclick=()=>control('shutdown');$('header-shutdown').onclick=()=>control('shutdown');
