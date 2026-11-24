@@ -1039,7 +1039,7 @@ def start_goal_mission(project_path: str, goal: str, profile: Optional[str] = No
     try:
         previous = latest_deliverable(project_path) if autopilot.enabled(orch.config) else None
         project_context = orch._read_project_context(previous or project_path)
-        project_context = staffing.planning_context(project_context, orch.config['_staff_team'])
+        project_context = staffing.planning_context({**project_context,'mcp_project_path':project_path}, orch.config['_staff_team'])
         if workflow_id:
             project_context = workflows.enrich_context(project_context, project_path, workflow_id, use_project_memory)
             workflow_snapshot = workflows.snapshot(project_context, use_project_memory)

@@ -343,6 +343,12 @@ class CompanionHandler(d.DashboardHandler):
                 elif action=='cancel':result=setup.cancel()
                 elif action=='check-mcp':result=setup.check_mcp(value)
                 elif action=='registration':result=setup.registration(value)
+                elif action=='enable-runtime-mcp':
+                    from core.mcp_runtime import configure
+                    result=configure(value)
+                elif action=='codex-claude-roles':
+                    from core.mcp_runtime import configure_codex_claude
+                    result=configure_codex_claude()
                 elif action=='finish-intro':result=setup.finish_intro()
                 else:raise ValueError('지원하지 않는 설치·점검 동작입니다.')
                 return self._send_json(result)

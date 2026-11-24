@@ -364,6 +364,7 @@ class MissionRunner:
         context['development_rules']=development_instruction(mission['project_path'])
         context['company_decisions'] = project_decisions(mission['project_path'])
         context['company_decision_rule'] = 'Recommendations for the existing goal only; do not expand scope, permissions, budgets or installation rights.'
+        context['mcp_project_path'] = mission['project_path']
         context['staff_workload'] = [{'staff_id':m['id'],'assigned_steps':sum(s['order'].get('assigned_staff_id')==m['id'] or s['order'].get('assigned_reviewer_id')==m['id'] for s in mission['steps'])} for m in (mission.get('staff_team') or {}).get('members',[])]
         last_run = mission["steps"][-1].get("run_id") or mission["mission_id"]
         from core import usage

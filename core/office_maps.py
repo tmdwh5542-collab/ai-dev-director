@@ -8,7 +8,6 @@ def snapshot(dashboard, query):
     activity=getattr(dashboard,'build_office_activity_payload',dashboard.build_activity_payload)()
     mission_views=activity.get('missions',[])
     focus=next((m for m in mission_views if m.get('mission_id')==activity.get('focus_mission_id')),None)
-    if focus and focus.get('live') and focus.get('staff_team',{}): team=focus['staff_team']
     if focus:
         activity['missions']=[{k:v for k,v in focus.items() if k in {'mission_id','goal','status','live','staff_team','steps'}}]
         activity['missions'][0]['steps']=[{'run_id':s.get('run_id')} for s in focus.get('steps',[])]

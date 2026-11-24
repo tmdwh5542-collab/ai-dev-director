@@ -29,3 +29,5 @@
 @media(max-width:820px){.workspace>.bottom-grid,.workspace>.right-column{grid-column:1;grid-row:auto}}
 
 .game-department-plan{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;list-style:none;padding:0;margin:12px 0;font-size:12px;line-height:1.7}.game-department-plan li{padding:9px;border:1px solid var(--line);overflow-wrap:anywhere}#team-game-checks{margin-top:16px;line-height:1.7}#team-game-checks>a,#team-game-checks>button{display:inline-block;padding:10px;margin:8px 8px 0 0;min-height:44px}#team-game-checks>ul:not(.game-department-plan){padding-left:20px;font-size:12px}@media(max-width:600px){.game-department-plan{grid-template-columns:1fr}}
+/* Keep the all-staff picker compact after filling the company's 28 slots. */
+.staff-selector{max-height:180px;overflow-y:auto;overscroll-behavior:contain}

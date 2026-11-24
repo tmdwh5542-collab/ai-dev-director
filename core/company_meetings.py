@@ -175,7 +175,7 @@ def run(ident, runner=None):
                     +json.dumps({'topic':m['topic'],'project':m['context'],'pending_agendas':m['pending_context']},ensure_ascii=False)[:24000])
             def call(member,stage,instruction):
                 _live(ident)
-                usage.set_context(role=member['slot'],stage=stage,mission_id=None,run_id=None,staff_id=member['id'],staff_name=member['name'],staff_team_revision=team['revision'])
+                usage.set_context(staff_project_path=None,role=member['slot'],stage=stage,mission_id=None,run_id=None,staff_id=member['id'],staff_name=member['name'],staff_team_revision=team['revision'])
                 prompt=base+'\nStaff: '+json.dumps(member,ensure_ascii=False)+'\nPrior discussion: '+json.dumps(transcript,ensure_ascii=False)[-22000:]+'\n'+instruction
                 result=runner.invoke(m['domains'][member['slot']],prompt,directory,stage)
                 _live(ident)

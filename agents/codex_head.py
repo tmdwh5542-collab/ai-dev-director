@@ -158,7 +158,7 @@ class CodexHead(BaseHead):
 
     def create_order(self, goal: str, project_context: Dict[str, Any]) -> OrderSchema:
         from core import staffing
-        staffing.activate_planning(project_context.get('staff_team'))
+        staffing.activate_planning(project_context.get('staff_team'),project_context.get('mcp_project_path') or project_context.get('project_path'))
         prompt = (
             "You are the HEAD architect of an autonomous software engineering system.\n"
             "Your task is to analyze the user goal and project files, then generate a strict work ORDER in JSON format.\n"
@@ -254,7 +254,7 @@ class CodexHead(BaseHead):
 
     def chat(self, message: str, project_context: Dict[str, Any], history: list) -> Dict[str, Any]:
         from core import staffing
-        staffing.activate_planning(project_context.get('staff_team'))
+        staffing.activate_planning(project_context.get('staff_team'),project_context.get('mcp_project_path') or project_context.get('project_path'))
         prompt = (
             "You are the HEAD architect of an autonomous software engineering system.\n"
             "The user is talking to you directly. You must determine if their message is a simple QUESTION or a DEV_TASK.\n\n"

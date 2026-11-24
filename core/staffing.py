@@ -135,7 +135,7 @@ def planning_context(context, team):
     from core.github_resources import instructions as github_reference_instructions
     context={**context,'github_reference_data':github_reference_instructions(context.get('project_path','')),'employee_tool_availability':tool_instructions(),'supplemental_skills':skill_instructions(),'company_knowledge':knowledge_instructions(context.get('project_path', ''))}
     cleaned={k:v for k,v in context.items() if k not in {'staff_team','staffing_instructions'}}
-    return {'staff_team':team,'staff_organization':[{'id':m['id'],'department':department_for(m),'position':position_for(m)} for m in team['members']],'company_decisions':decisions,'company_decision_rule':'Recommendations for the existing goal only. These do not expand allowed paths, budgets, installation rights or execution permissions. Follow existing approval and scope gates.','staffing_instructions':
+    return {'mcp_project_path':context.get('mcp_project_path') or context.get('project_path'), 'staff_team':team,'staff_organization':[{'id':m['id'],'department':department_for(m),'position':position_for(m)} for m in team['members']],'company_decisions':decisions,'company_decision_rule':'Recommendations for the existing goal only. These do not expand allowed paths, budgets, installation rights or execution permissions. Follow existing approval and scope gates.','staffing_instructions':
         'This is the captured staff roster for this mission. Split requested work into small milestones led by an appropriate BUILDER member. '
         'Department managers coordinate their department; distribute small tasks among suitable specialists and consider prior step assignments to balance workload. Staff do not write the same files concurrently. If any execution role or department manager is missing, explain whom to hire; do not issue an executable order. '
         'When generating an ORDER include assigned_staff_id from a BUILDER member ID. Only use staff required by the goal; do not invent work to keep everyone busy. '
@@ -189,17 +189,17 @@ def activate(order, slot):
     from core import usage
     member=member_for(order,slot)
     usage.set_context(role=slot,staff_id=member['id'] if member else None,staff_name=member['name'] if member else None,
-                      staff_team_revision=validate(order.staff_team)['revision'] if member else None)
+                      staff_team_revision=validate(order.staff_team)['revision'] if member else None,staff_project_path=getattr(order,'staff_reference_project',None) if member else None)
     return member
 
 
-def activate_planning(team):
+def activate_planning(team, project=None):
     from core import usage
     team=validate(team, require_ready=False) if team else None
     heads=[m for m in execution_members(team) if m['slot']=='HEAD'] if team else []
     member=next((m for m in heads if department_for(m)=='planning' and position_for(m)=='manager'),heads[0] if heads else None)
     usage.set_context(role='HEAD',staff_id=member['id'] if member else None,staff_name=member['name'] if member else None,
-                      staff_team_revision=team['revision'] if team else None)
+                      staff_team_revision=team['revision'] if team else None,staff_project_path=project if member else None)
 
 
 def guidance(order,slot):

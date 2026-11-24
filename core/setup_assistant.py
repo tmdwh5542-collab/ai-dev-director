@@ -75,7 +75,8 @@ def public():
     intro_path=staffing.settings_path().parent/'desktop_setup.json'
     try:intro=json.loads(intro_path.read_text(encoding='utf-8'))
     except (OSError,ValueError):intro={'version':SETUP_FLOW_VERSION,'pending':False}
-    return {'onboarding':intro,'runtime':runtime,'installation':job,'mcp_check':mcp if valid else None,
+    from core.mcp_runtime import current as mcp_runtime_settings
+    return {'runtime_mcp':mcp_runtime_settings(),'onboarding':intro,'runtime':runtime,'installation':job,'mcp_check':mcp if valid else None,
         'hermes':{'enabled':h['settings']['enabled'],'sdk_checked':bool(probe.get('ok')),'key_present':h['key_present'],'model_configured':bool(h['settings']['model']),'configuration_ready':hermes_ready,'authentication_verified':False},
         'steps':[{'id':'node','title':'1. Node.js·npm 확인','status':'READY' if runtime['node_compatible'] and runtime['npm_installed'] else 'ACTION_REQUIRED'},
                  {'id':'tools','title':'2. 웹 도구·브라우저 설치','status':'READY' if runtime['ready'] else 'ACTION_REQUIRED'},

@@ -69,11 +69,11 @@ function assignment(key){
 function renderTeam(){
  const mission=focusMission(),current=data?.team?.team;
  const captured=mission?.live&&mission.staff_team?.members?mission.staff_team:null;
- const team=captured||current;if(!team)return;const owner=data?.company?.company?.owner;
+ const team=current||captured;if(!team)return;const owner=data?.company?.company?.owner;
  window.OfficeRoom=departmentFilter;companyEditor.apply(data.company);document.body.classList.toggle('company-setup-required',!owner);
  visibleTeam=team;
- text('team-summary','팀 '+team.members.length+'명');
- text('team-note',captured&&current&&captured.revision!==current.revision?'진행 중인 미션은 시작할 때의 '+team.members.length+'명 팀을 사용합니다. 저장한 '+current.members.length+'명 팀은 새 미션부터 적용됩니다.':'직무에 맞는 직원이 순서대로 일합니다. 팀 설정은 다음 미션부터 적용됩니다.');
+ text('team-summary','재직 '+team.members.length+'명 · 대표 별도');
+ text('team-note',captured&&current&&captured.revision!==current.revision?'사무실은 현재 재직 '+team.members.length+'명을 표시합니다. 진행 중인 미션은 기존 '+captured.members.length+'명 팀으로 계속 진행하고 새 구성은 다음 미션부터 적용됩니다.':'직무에 맞는 직원이 순서대로 일합니다. 팀 설정은 다음 미션부터 적용됩니다.');
  const visualRevision=team.revision+data.company.revision+departmentFilter+JSON.stringify(data.visitors||[]);if(teamRevision===visualRevision)return;teamRevision=visualRevision;
  if(!['ceo',...Object.keys(data.team.departments||{})].includes(departmentFilter))departmentFilter='ceo';
  window.OfficeRoom=departmentFilter;
@@ -84,6 +84,8 @@ function renderTeam(){
  const destinations=new Map((data.visitors||[]).filter(v=>v.team_revision===team.revision).map(v=>[v.id,v]));
  const home=m=>positionOf(m)==='secretary'?'ceo':departmentOf(m);
  const visibleMembers=team.members.filter(m=>(destinations.get(m.id)?.room||home(m))===departmentFilter);
+ text('room-occupancy','회사 재직 '+team.members.length+'명 · 이 방 직원 '+visibleMembers.length+'명'+(departmentFilter==='ceo'?' · 대표실·비서실 화면입니다. 다른 직원은 부서 탭에서 볼 수 있습니다.':''));
+ $('office-fill-staff').hidden=team.members.length>=28;
  const rooms=[['ceo','대표실 · 비서실'],...Object.entries(data.team.departments||{})];
  function changeRoom(id){departmentFilter=id;window.OfficeRoom=id;try{localStorage.setItem('director.office.room',id);}catch(e){}teamRevision=null;paint();}
  $('room-prev').onclick=()=>changeRoom(rooms[(rooms.findIndex(r=>r[0]===departmentFilter)+rooms.length-1)%rooms.length][0]);
@@ -187,6 +189,7 @@ const decor=window.OfficeDecor({readJSON:json,viewport});
 const scene=window.OfficeScene({select,getRoute:(a,x,y)=>decor.route(a,x,y)});
 const hermes=window.OfficeHermes({readJSON:json,onChange:()=>poll()});
 const executive=window.OfficeExecutive({readJSON:json,getProject:()=>data?.status?.project_path,onChange:()=>poll()});
+$('office-fill-staff').onclick=async()=>{await editor.open();if($('team-dialog').open)$('team-game-ready').click();};
 const companyEditor=window.OfficeCompany({readJSON:json,onSaved:(state,message)=>{if(state){if(data)data.company=state;teamRevision=null;poll();}else{$('office-error').hidden=false;text('office-error',message);}}});
 for(const role of Object.keys(DEPTS))createStation(role);select('CEO');
 const editor=window.OfficeTeamEditor({readJSON:json,getProject:()=>data?.status?.project_path,onSaved:(team,message)=>{if(team){if(data)data.team.team=team;poll();}else{$('office-error').hidden=false;text('office-error',message);}}});

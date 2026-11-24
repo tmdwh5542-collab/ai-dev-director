@@ -84,7 +84,7 @@ class BaseHead(ABC):
         'order': ORDER|None}."""
         import json
         from core import staffing
-        staffing.activate_planning(project_context.get('staff_team'))
+        staffing.activate_planning(project_context.get('staff_team'),project_context.get('mcp_project_path') or project_context.get('project_path'))
         prompt = (
             "You are HEAD, driving a multi-step development MISSION to completion on the user's behalf.\n"
             + self.PROXY_POLICY +

@@ -137,6 +137,8 @@ class ProcessTreeRunner:
     ) -> ProcessResult:
         """Every AI CLI call is written to the work ledger (core.usage) around the real execution; ledger problems
         never affect the call itself."""
+        from core.mcp_runtime import augment
+        argv = augment(argv)
         row_id = None
         try:
             from core import usage
