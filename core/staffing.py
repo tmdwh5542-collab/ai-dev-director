@@ -59,6 +59,10 @@ def validate(value, require_ready=True):
             from core.company import validate_character
             member = {**member, 'character': validate_character(member['character'])}
         ids.add(member['id']);members.append({**member,'name':member['name'].strip(),'duties':member['duties'].strip()})
+    active = value.get('active_staff_ids')
+    if active is not None and (not isinstance(active, list) or any(not isinstance(i, str) for i in active) or len(set(active)) != len(active) or set(active) - ids):
+        raise ValueError('업무 배정 대상 직원 목록을 확인하세요.')
+    executing = [m for m in members if active is None or m['id'] in active]
     for department in DEPARTMENTS:
         staff=[m for m in members if department_for(m)==department]
         if len(staff)>DEPARTMENT_LIMIT:
@@ -68,10 +72,18 @@ def validate(value, require_ready=True):
             raise ValueError(DEPARTMENTS[department]+'의 과장은 한 명만 둘 수 있습니다.')
         if require_ready and staff and not managers:
             raise ValueError(DEPARTMENTS[department]+'에 과장을 한 명 지정하세요.')
-    if require_ready and set(SLOTS)-{m['slot'] for m in members}:
+        selected = [m for m in executing if department_for(m) == department]
+        if require_ready and selected and not any(position_for(m) == 'manager' for m in selected):
+            raise ValueError(DEPARTMENTS[department]+'의 업무 배정 대상에 과장을 포함하세요.')
+    if require_ready and set(SLOTS)-{m['slot'] for m in executing}:
         raise ValueError('개발을 시작하려면 기획·지휘, 구현, 독립 검수 담당을 각각 한 명 이상 채용하세요.')
-    revision=hashlib.sha256(json.dumps(members,sort_keys=True,ensure_ascii=False).encode()).hexdigest()[:20]
-    return {'members':members,'revision':revision}
+    revision=hashlib.sha256(json.dumps(members if active is None else {'members': members, 'active_staff_ids': sorted(active)},sort_keys=True,ensure_ascii=False).encode()).hexdigest()[:20]
+    return {'members':members,'revision':revision, **({'active_staff_ids': sorted(active)} if active is not None else {})}
+
+
+def execution_members(team):
+    active = team.get('active_staff_ids')
+    return [m for m in team['members'] if active is None or m['id'] in active]
 
 
 def department_for(member):
@@ -104,6 +116,7 @@ def save(value, expected_revision):
         path=settings_path();path.parent.mkdir(parents=True,exist_ok=True)
         temporary=path.with_suffix('.tmp')
         stored=json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
+        stored.pop('active_staff_ids', None)
         temporary.write_text(json.dumps({**stored, **team},ensure_ascii=False,indent=2),encoding='utf-8');temporary.replace(path)
     return team
 
@@ -126,13 +139,14 @@ def planning_context(context, team):
         'Department managers coordinate their department; distribute small tasks among suitable specialists and consider prior step assignments to balance workload. Staff do not write the same files concurrently. If any execution role or department manager is missing, explain whom to hire; do not issue an executable order. '
         'When generating an ORDER include assigned_staff_id from a BUILDER member ID. Only use staff required by the goal; do not invent work to keep everyone busy. '
         'Staff duties are supplemental; existing scope, permission, verification and independent-review policy remain authoritative. '
+        'Only assign work to IDs in staff_team.active_staff_ids when present; all other employees remain in the company but are not assigned to this mission. '
         'Staff share the configured AI accounts and work sequentially; they are not additional accounts.', **cleaned}
 
 
 def member_for(order, slot):
     team=getattr(order,'staff_team',None)
     if not team:return None
-    members=[m for m in validate(team)['members'] if m['slot']==slot]
+    members=[m for m in execution_members(validate(team)) if m['slot']==slot]
     chosen=getattr(order,'assigned_staff_id',None)
     if slot=='REVIEWER':
         return next((m for m in members if m['id']==getattr(order,'assigned_reviewer_id',None)),members[0])
@@ -154,7 +168,7 @@ def member_for(order, slot):
 def bind_order(order, team, history=None, project=None):
     bound=order.model_copy(deep=True);bound.staff_team=validate(team)
     bound.staff_reference_project=project
-    members=bound.staff_team['members']
+    members=execution_members(bound.staff_team)
     history=history or []
     def least_used(candidates, field):
         counts={m['id']:sum(1 for step in history if (step.get('order') or {}).get(field)==m['id']) for m in candidates}
@@ -181,7 +195,7 @@ def activate(order, slot):
 def activate_planning(team):
     from core import usage
     team=validate(team, require_ready=False) if team else None
-    heads=[m for m in team['members'] if m['slot']=='HEAD'] if team else []
+    heads=[m for m in execution_members(team) if m['slot']=='HEAD'] if team else []
     member=next((m for m in heads if department_for(m)=='planning' and position_for(m)=='manager'),heads[0] if heads else None)
     usage.set_context(role='HEAD',staff_id=member['id'] if member else None,staff_name=member['name'] if member else None,
                       staff_team_revision=team['revision'] if team else None)

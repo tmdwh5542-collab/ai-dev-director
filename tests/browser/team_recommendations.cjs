@@ -8,6 +8,7 @@ const server=spawn(process.env.DIRECTOR_UI_PYTHON||'python',[root+'/tests/browse
  await page.goto(base+'/office');await page.waitForFunction(()=>document.querySelector('.office-character'));
  await page.locator('#company-edit').click();await page.locator('#visual-mode').selectOption('cozy');await page.locator('#company-save').click();await page.waitForFunction(()=>document.body.dataset.visualMode==='cozy');
  await page.locator('#team-edit').click();await page.waitForFunction(()=>document.getElementById('team-dialog').open);
+ await page.locator('#team-recommend-policy').selectOption('specialty');
  const old=await (await page.request.get(base+'/ops/team')).json();assert.equal(old.team.members.length,6);
  // Recommendations must analyze this unsaved draft, not replace it with the saved six-person team.
  while(await page.locator('.team-member').count())await page.locator('.team-remove').first().click();
@@ -25,7 +26,7 @@ const server=spawn(process.env.DIRECTOR_UI_PYTHON||'python',[root+'/tests/browse
  const saved=(await (await page.request.get(base+'/ops/team')).json()).team;assert.equal(saved.members.length,count);assert.equal(saved.members[0].name,'우리 기획 담당');
  for(const dept of Object.keys(old.departments)){const people=saved.members.filter(m=>m.department===dept);assert(people.length<=4);if(people.length)assert.equal(people.filter(m=>m.position==='manager').length,1);}
  assert(['HEAD','BUILDER','REVIEWER'].every(slot=>saved.members.some(m=>m.slot===slot)));
- await page.locator('#team-edit').click();await page.locator('#team-recommend-goal').fill('audio 사운드 기능 1건');await page.setViewportSize({width:390,height:844});await page.locator('#team-recommend').click();await page.waitForFunction(()=>document.getElementById('team-recommend-summary').textContent.includes('채용 0명'));
+ await page.locator('#team-edit').click();await page.locator('#team-recommend-policy').selectOption('specialty');await page.locator('#team-recommend-goal').fill('audio 사운드 기능 1건');await page.setViewportSize({width:390,height:844});await page.locator('#team-recommend').click();await page.waitForFunction(()=>document.getElementById('team-recommend-summary').textContent.includes('채용 0명'));
  await page.locator('#team-dialog').evaluate(d=>{d.scrollTop+=document.querySelector('.team-recommend-panel').getBoundingClientRect().top-d.getBoundingClientRect().top-110;});await page.screenshot({path:path.join(art,'team-recommendations-mobile.png')});assert(await page.locator('#team-dialog').evaluate(n=>n.scrollWidth<=n.clientWidth+1));
  // Changes in another window invalidate the server revision without discarding this window's draft.
  const roles=await (await page.request.get(base+'/ops/roles')).json(),remote=JSON.parse(JSON.stringify(saved));remote.members[0].name='다른 창 변경';const response=await page.request.post(base+'/ops/team',{headers:{'X-Solomon-Bridge':roles.csrf},data:{team:remote,expected_revision:saved.revision}});assert.equal(response.status(),200);
