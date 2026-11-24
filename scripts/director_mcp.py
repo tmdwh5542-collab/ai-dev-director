@@ -1,6 +1,6 @@
-"""Minimal MCP stdio read-only adapter; one chosen project + employee per client.
+"""Minimal MCP stdio reference adapter; one chosen project + employee per client.
 Example: python scripts/director_mcp.py --project C:/work/game --staff planner
-JSON-RPC output only; no credentials, package installs, commands or write tools.
+JSON-RPC output only; no credentials, package installs, commands or project writes. GitHub acquire writes only the bounded reference cache.
 """
 import argparse,json,sys
 from pathlib import Path
@@ -14,8 +14,8 @@ def dispatch(message,project,staff):
     if method=='tools/list':
         specs=[]
         for name in tools.allowed(staff):
-            props={'path':{'type':'string'}} if name=='project_read' else {'repo':{'type':'string'},'file':{'type':'string'},'ref':{'type':'string'}} if name=='github_read' else {}
-            specs.append({'name':name,'description':tools.CATALOG[name]['description'],'inputSchema':{'type':'object','properties':props,'additionalProperties':False,'required':['path'] if name=='project_read' else ['repo'] if name=='github_read' else []},'annotations':{'readOnlyHint':True,'destructiveHint':False}})
+            props={'path':{'type':'string'}} if name=='project_read' else {'repo':{'type':'string'},'file':{'type':'string'},'ref':{'type':'string'}} if name in ('github_read','github_acquire') else {'query':{'type':'string'}} if name=='github_search' else {}
+            specs.append({'name':name,'description':tools.CATALOG[name]['description'],'inputSchema':{'type':'object','properties':props,'additionalProperties':False,'required':['path'] if name=='project_read' else ['repo','file'] if name=='github_acquire' else ['repo'] if name=='github_read' else ['query'] if name=='github_search' else []},'annotations':{'readOnlyHint':name!='github_acquire','destructiveHint':False}})
         return {'tools':specs}
     if method=='tools/call':
         try:

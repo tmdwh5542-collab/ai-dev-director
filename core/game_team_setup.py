@@ -1,4 +1,4 @@
-"""One/two-person game departments, additive staffing and honest local readiness."""
+"""Full game departments with one/two assigned workers, additive staffing and honest local readiness."""
 import copy
 import os
 import uuid
@@ -27,6 +27,7 @@ def propose(team, missions, goal='', project_path=''):
     selected = [m for m in missions if m.get('status') in ACTIVE and (not project_path or key(m.get('project_path', '')) == key(project_path))]
     tasks = {d: 0 for d in staffing.DEPARTMENTS}
     pending = {d: 0 for d in staffing.DEPARTMENTS}
+    pending_by_staff = {}
     by_id = {m['id']: m for m in members}
     kinds = set()
 
@@ -46,6 +47,7 @@ def propose(team, missions, goal='', project_path=''):
             for ident in {order.get('assigned_staff_id'), order.get('assigned_reviewer_id')} - {None}:
                 if ident in by_id:
                     pending[staffing.department_for(by_id[ident])] += 1
+                    pending_by_staff[ident] = pending_by_staff.get(ident, 0) + 1
         count(text)
     if goal.strip():
         count(goal)
@@ -58,13 +60,15 @@ def propose(team, missions, goal='', project_path=''):
         return [m for m in members if staffing.department_for(m) == dept]
 
     def add(dept, specialty, secretary=False):
-        if len(people(dept)) >= 2 or len(members) >= staffing.MAX_MEMBERS:
-            text = staffing.DEPARTMENTS[dept] + ': 기존 인원을 유지한 상태로 1~2명 목표 안에서 필수 역할을 채울 수 없습니다. 직무·직급을 직접 조정하세요.'
+        if len(people(dept)) >= staffing.DEPARTMENT_LIMIT or len(members) >= staffing.MAX_MEMBERS:
+            text = staffing.DEPARTMENTS[dept] + ': 부서 정원이 가득 차 필수 역할을 추가할 수 없습니다. 직무·직급을 직접 조정하세요.'
             if text not in blocked:
                 blocked.append(text)
             return False
         name, slot, _, duties = ROLES[specialty]
         manager = any(staffing.position_for(m) == 'manager' for m in people(dept))
+        if specialty == 'support' and manager:
+            name = '경영지원 담당'
         if secretary:
             name, duties = '대표 비서', '부서 보고를 취합하고 대표에게 전달하며 회의와 보고 일정의 누락을 점검합니다.'
         names = {m['name'] for m in members}
@@ -82,7 +86,7 @@ def propose(team, missions, goal='', project_path=''):
                                 'color': ('mint', 'blue', 'violet', 'coral', 'gold')[index % 5]}}
         action = {'id': 'hire_' + member['id'], 'kind': 'hire', 'member': member,
                   'depends_on': [dependencies[dept]] if manager and dept in dependencies else [],
-                  'reason': f'{staffing.DEPARTMENTS[dept]}의 관련 미완료·예정 업무 {tasks[dept]}건, 배정된 미완료 단계 {pending[dept]}건. 기본 1명, 4건 이상은 2명을 목표로 배치합니다.',
+                  'reason': f'{staffing.DEPARTMENTS[dept]}의 관련 미완료·예정 업무 {tasks[dept]}건, 배정된 미완료 단계 {pending[dept]}건. 재직 정원은 4명으로 채우고 업무는 기본 1명, 4건 이상은 2명에게 배정합니다.',
                   'related_tasks': [goal[:140]] if goal.strip() else []}
         actions.append(action)
         if not manager and not secretary:
@@ -97,12 +101,12 @@ def propose(team, missions, goal='', project_path=''):
         elif not any(staffing.position_for(m) == 'manager' for m in people(dept)):
             targets[dept] = 2
             add(dept, primary)  # e.g. keep a secretary, add the support manager
-        while len(people(dept)) < targets[dept]:
-            specialty = 'audio' if dept == 'design' and 'audio' in kinds else 'general' if dept == 'development' and 'general' in kinds else primary
+        while len(people(dept)) < staffing.DEPARTMENT_LIMIT:
+            specialty = 'audio' if dept == 'design' and not any(m['specialty'] == 'audio' for m in people(dept)) else 'general' if dept == 'development' and not any(m['specialty'] == 'general' for m in people(dept)) else primary
             secretary = dept == 'support' and not any(staffing.position_for(m) == 'secretary' for m in people(dept))
             if not add(dept, specialty, secretary):
                 break
-    # Preserve existing roles; if a department has an unusual roster, fill missing execution gates within two.
+    # Preserve existing roles; if a department has an unusual roster, fill missing execution gates within the roster capacity.
     for slot, dept in [('HEAD', 'planning'), ('BUILDER', 'development'), ('REVIEWER', 'quality')]:
         if not any(m['slot'] == slot for m in members):
             targets[dept] = 2
@@ -113,8 +117,8 @@ def propose(team, missions, goal='', project_path=''):
         manager = next((m for m in staff if staffing.position_for(m) == 'manager'), None)
         if manager:
             selected_staff.append(manager)
-        primary = PRIMARY[dept]
-        others = sorted([m for m in staff if m is not manager], key=lambda m: (m['specialty'] != primary, m['id']))
+        primary = 'audio' if dept == 'design' and 'audio' in kinds else 'general' if dept == 'development' and 'general' in kinds else PRIMARY[dept]
+        others = sorted([m for m in staff if m is not manager], key=lambda m: (dept == 'support' and m['position'] != 'secretary', m['specialty'] != primary, pending_by_staff.get(m['id'], 0), m['id']))
         selected_staff.extend(others[:max(0, targets[dept] - bool(manager))])
     for slot in staffing.SLOTS:
         if any(m['slot'] == slot for m in selected_staff):
@@ -141,12 +145,12 @@ def propose(team, missions, goal='', project_path=''):
             'department_plan': [{'department': d, 'name': staffing.DEPARTMENTS[d], 'tasks': tasks[d], 'pending_steps': pending[d],
                                  'target': targets[d], 'actual': len(people(d)), 'assigned': sum(staffing.department_for(m) == d for m in selected_staff), 'retained_extra': max(0, sum(staffing.department_for(m) == d for m in original['members']) - targets[d])} for d in tasks],
             'team_ready': team_ready, 'prepared_team': prepared,
-            'basis': '게임 개발 7개 부서를 모두 구성합니다. 부서별 미완료·예정 업무 또는 배정된 미완료 단계가 3건 이하면 1명, 4건 이상이면 2명입니다. 기존 인원은 줄이지 않습니다. 기획·검수·지원은 전체 미완료 업무도 고려합니다. 기존 비서 보존이나 필수 역할 보강이 필요하면 2명까지 배치합니다. 시간·난이도의 실측은 아닌 로컬 참고 기준입니다.'}
+            'basis': '게임 개발 7개 부서를 과장 포함 각 4명, 총 28명으로 채웁니다. 재직 인원과 업무 배정 인원을 구분합니다. 부서별 미완료·예정 업무 또는 배정된 미완료 단계가 3건 이하면 1명, 4건 이상이면 2명입니다. 기존 인원은 줄이지 않습니다. 기획·검수·지원은 전체 미완료 업무도 고려합니다. 기존 비서 보존이나 필수 역할 보강이 필요하면 2명까지 배치합니다. 시간·난이도의 실측은 아닌 로컬 참고 기준입니다.'}
 
 
 def readiness(team, config, project_path=''):
     from core import ai_connections, role_settings, web_workspace
-    checks = [{'id': 'team', 'title': '7개 부서·과장·기획/구현/독립 검수', 'status': 'READY'}]
+    checks = [{'id': 'team', 'title': '7개 부서 각 4명·총 28명·업무 배정 1~2명', 'status': 'READY'}]
     staffing.validate(team)
     cfg = ai_connections.public()
     roles = cfg['settings']['roles'] if cfg['registered'] else role_settings.current(config)
@@ -157,6 +161,7 @@ def readiness(team, config, project_path=''):
         present = available['key_present'] and bool(connection['model']) if connection['mode'] == 'api' else available['cli_installed']
         checks.append({'id': role, 'title': role.upper() + ' · ' + domain,
                        'status': 'CONFIGURED_NOT_AUTHENTICATED' if present else 'ACTION_REQUIRED'})
+    checks.append({'id':'github','title':'GitHub 기술·스킬 검색/문서 받기 · 직원별 허용 도구','status':'REQUIRES_MCP'})
     engine = None
     try:
         if not project_path:

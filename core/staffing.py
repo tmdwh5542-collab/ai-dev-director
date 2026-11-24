@@ -132,7 +132,8 @@ def planning_context(context, team):
     from core.skill_library import instructions as skill_instructions
     from core.company_knowledge import instructions as knowledge_instructions
     from core.employee_tools import instructions as tool_instructions
-    context={**context,'employee_tool_availability':tool_instructions(),'supplemental_skills':skill_instructions(),'company_knowledge':knowledge_instructions(context.get('project_path', ''))}
+    from core.github_resources import instructions as github_reference_instructions
+    context={**context,'github_reference_data':github_reference_instructions(context.get('project_path','')),'employee_tool_availability':tool_instructions(),'supplemental_skills':skill_instructions(),'company_knowledge':knowledge_instructions(context.get('project_path', ''))}
     cleaned={k:v for k,v in context.items() if k not in {'staff_team','staffing_instructions'}}
     return {'staff_team':team,'staff_organization':[{'id':m['id'],'department':department_for(m),'position':position_for(m)} for m in team['members']],'company_decisions':decisions,'company_decision_rule':'Recommendations for the existing goal only. These do not expand allowed paths, budgets, installation rights or execution permissions. Follow existing approval and scope gates.','staffing_instructions':
         'This is the captured staff roster for this mission. Split requested work into small milestones led by an appropriate BUILDER member. '
@@ -207,7 +208,9 @@ def guidance(order,slot):
     skills=instructions(department_for(member) if member else None)
     from core.development_rules import instruction as rule_instruction
     reference=getattr(order,'staff_reference_project',None)
-    if reference:skills=rule_instruction(reference)+'\n'+skills
+    if reference:
+        from core.github_resources import instructions as github_reference_instructions
+        skills=rule_instruction(reference)+'\n'+skills+github_reference_instructions(reference)
     from core.company_knowledge import instructions as knowledge_instructions
     skills += knowledge_instructions(str(getattr(order,'staff_reference_project',None) or ''), department_for(member) if member else None)
     return skills + (('Assigned staff: '+member['name']+' ['+member['id']+']. Specialty: '+SPECIALTIES[member['specialty']]+'. Duties: '+member['duties']+

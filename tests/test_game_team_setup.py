@@ -12,10 +12,10 @@ def test_all_seven_departments_have_one_manager_and_all_execution_roles():
     result = game.propose({'members': []}, [])
     assert result['team_ready']
     team = staffing.validate(result['prepared_team'])
-    assert len(team['members']) == 7
+    assert len(team['members']) == 28
     assert {staffing.department_for(m) for m in team['members']} == set(staffing.DEPARTMENTS)
-    assert all(m['position'] == 'manager' for m in team['members'])
-    assert all(r['target'] == r['actual'] == 1 for r in result['department_plan'])
+    assert sum(m['position'] == 'manager' for m in team['members']) == 7
+    assert all(r['actual'] == 4 and r['assigned'] == 1 for r in result['department_plan'])
     assert not game.propose(team, [])['suggestions']
 
 
@@ -24,11 +24,11 @@ def test_four_unfinished_tasks_use_two_people_but_completed_tasks_do_not():
     result = game.propose({'members': []}, missions)
     plan = {p['department']: p for p in result['department_plan']}
     assert plan['design']['tasks'] == 4  # UI + audio in one mission counts once for the department
-    assert plan['design']['actual'] == 2
-    assert plan['level']['actual'] == 1
-    assert plan['planning']['actual'] == plan['quality']['actual'] == plan['support']['actual'] == 2
+    assert plan['design']['assigned'] == 2
+    assert plan['level']['assigned'] == 1
+    assert plan['planning']['assigned'] == plan['quality']['assigned'] == plan['support']['assigned'] == 2
     assert any(m['position'] == 'secretary' for m in result['prepared_team']['members'])
-    assert all(p['actual'] <= 2 for p in result['department_plan'])
+    assert all(p['actual'] == 4 and p['assigned'] <= 2 for p in result['department_plan'])
 
 
 def test_assigned_backlog_project_scope_and_existing_staff_preservation():
@@ -38,9 +38,9 @@ def test_assigned_backlog_project_scope_and_existing_staff_preservation():
     steps = [{'order': {'goal': '작은 기능', 'assigned_staff_id': dev['id']}} for _ in range(4)]
     result = game.propose(team, [job('작은 기능', steps=steps)] + [job('레벨 맵', project_path='/other') for _ in range(20)], project_path='/game')
     plan = {p['department']: p for p in result['department_plan']}
-    assert plan['development']['actual'] == 2
-    assert plan['level']['actual'] == 1
-    assert result['prepared_team']['members'][:7] == old['members']
+    assert plan['development']['assigned'] == 2
+    assert plan['level']['assigned'] == 1
+    assert result['prepared_team']['members'] == old['members']
     assert team == old
 
 
@@ -55,7 +55,7 @@ def test_overstaffed_departments_and_secretaries_are_never_removed():
     final = result['prepared_team']['members']
     assert all(any(m == old for m in final) for old in team['members'])
     assert next(p for p in result['department_plan'] if p['department'] == 'development')['retained_extra'] == 3
-    assert next(p for p in result['department_plan'] if p['department'] == 'support')['actual'] == 2
+    assert next(p for p in result['department_plan'] if p['department'] == 'support')['actual'] == 4
     assert all(p['assigned'] <= 2 for p in result['department_plan'])
     assert next(p for p in result['department_plan'] if p['department'] == 'development')['assigned'] == 1
 
@@ -64,28 +64,25 @@ def test_inactive_staff_cannot_be_explicitly_assigned_and_snapshot_survives_rost
     from schemas.order import OrderSchema
     team = game.propose({'members': []}, [])['prepared_team']
     dev = next(m for m in team['members'] if m['department'] == 'development')
-    inactive = {**dev, 'id': 'reserve_dev', 'name': '지원 개발자', 'position': 'employee'}
-    team['members'].append(inactive)
-    reviewer = next(m for m in team['members'] if m['slot'] == 'REVIEWER')
-    team['members'].append({**reviewer, 'id': 'reserve_reviewer', 'name': '지원 검수자', 'position': 'employee'})
+    inactive = next(m for m in team['members'] if m['department'] == 'development' and m['id'] not in team['active_staff_ids'])
+    reserve_reviewer = next(m for m in team['members'] if m['slot'] == 'REVIEWER' and m['id'] not in team['active_staff_ids'])
     team = staffing.validate(team)
-    bound = staffing.bind_order(OrderSchema(goal='게임 로직', assigned_staff_id='reserve_dev', assigned_reviewer_id='reserve_reviewer'), team)
-    assert bound.assigned_staff_id != 'reserve_dev'
-    assert bound.assigned_reviewer_id != 'reserve_reviewer'
+    bound = staffing.bind_order(OrderSchema(goal='게임 로직', assigned_staff_id=inactive['id'], assigned_reviewer_id=reserve_reviewer['id']), team)
+    assert bound.assigned_staff_id != inactive['id']
+    assert bound.assigned_reviewer_id != reserve_reviewer['id']
     captured = copy.deepcopy(bound.staff_team)
     next_team = {**team, 'active_staff_ids': [m['id'] for m in team['members']]}
     saved = staffing.save(next_team, staffing.current()['revision'])
     assert saved['revision'] != team['revision']
     assert bound.staff_team == captured
-    assert 'reserve_dev' not in bound.staff_team['active_staff_ids']
+    assert inactive['id'] not in bound.staff_team['active_staff_ids']
 
 
 def test_bad_existing_execution_roles_do_not_claim_ready_when_capped():
     team = game.propose({'members': []}, [])['prepared_team']
-    reviewer = next(m for m in team['members'] if m['slot'] == 'REVIEWER')
-    reviewer['slot'] = 'BUILDER'
-    other = {**reviewer, 'id': 'quality_2', 'name': '기존 품질 직원', 'position': 'employee'}
-    team['members'].append(other)
+    for member in team['members']:
+        if member['slot'] == 'REVIEWER':
+            member['slot'] = 'BUILDER'
     result = game.propose(team, [])
     assert not result['team_ready'] and result['blocked'] and result['missing_slots']
 

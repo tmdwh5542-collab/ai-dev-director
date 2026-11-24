@@ -50,7 +50,7 @@ window.OfficeTeamEditor=function({readJSON,onSaved,getProject=()=>''}){
  }
  function showGameReadiness(value,plan){
   const host=$('team-game-checks');host.replaceChildren();const title=document.createElement('h3');title.textContent='게임 개발팀 저장 완료 · 실행 준비 점검';host.append(title);renderDepartments(host,plan);
-  const labels={READY:'준비됨',CONFIGURED_NOT_AUTHENTICATED:'연결 도구 확인 · 로그인/할당량 미검증',ACTION_REQUIRED:'설정 필요',DETECTED_NOT_EXECUTED:'프로젝트 감지 · 실행 미검증',NOT_VERIFIED:'실제 PC 검증 필요'};
+  const labels={READY:'준비됨',CONFIGURED_NOT_AUTHENTICATED:'연결 도구 확인 · 로그인/할당량 미검증',ACTION_REQUIRED:'설정 필요',DETECTED_NOT_EXECUTED:'프로젝트 감지 · 실행 미검증',NOT_VERIFIED:'실제 PC 검증 필요',REQUIRES_MCP:'도구 제공 · AI 클라이언트 MCP 등록 필요'};
   const list=document.createElement('ul');for(const check of value.checks){const li=document.createElement('li');li.textContent=check.title+' — '+(labels[check.status]||check.status);list.append(li);}host.append(list);
   const note=document.createElement('p');note.className='team-recommend-warning';note.textContent=value.notice;host.append(note);
   for(const [href,label] of [['/settings','AI 연결 설정'],['/setup','PC 도구 점검']]){const a=document.createElement('a');a.href=href;a.className='secondary';a.textContent=label;host.append(a);}
@@ -62,7 +62,7 @@ window.OfficeTeamEditor=function({readJSON,onSaved,getProject=()=>''}){
   if(saving||recommending)return;
   const project=$('team-recommend-scope').value==='project'?getProject():'';
   if($('team-recommend-scope').value==='project'&&!project){message('현재 프로젝트가 없습니다. 회사 전체 범위를 선택하거나 미션 센터에서 프로젝트를 선택하세요.');return;}
-  recommending=true;invalidateRecommendations();message('');$('team-recommend-summary').textContent='전 부서의 1~2명 구성을 계산하고 저장합니다.';
+  recommending=true;invalidateRecommendations();message('');$('team-recommend-summary').textContent='전 부서 각 4명, 총 28명으로 채우고 업무 배정 1~2명을 계산해 저장합니다.';
   for(const field of $('team-form').querySelectorAll('input,select,textarea,button'))field.disabled=true;
   try{const roles=await request('/ops/roles');const result=await request('/ops/team/game-ready',{method:'POST',headers:{'Content-Type':'application/json','X-Solomon-Bridge':roles.csrf},body:JSON.stringify({team:draft,expected_revision:revision,goal:$('team-recommend-goal').value,project_path:project||'',game_project_path:getProject()||''})});
    draft=JSON.parse(JSON.stringify(result.team));revision=draft.revision;dirty=false;render();onSaved(result.team,result.message);$('team-recommend-summary').textContent=result.message;showGameReadiness(result.readiness,result.department_plan);
