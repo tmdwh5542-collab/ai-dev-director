@@ -1,0 +1,6 @@
+37c88077f92444fa92b854d22f6df19a9a333258c158f88d66e38a239f011575  AI-DEV-DIRECTOR-Windows-2026.11.24.2.zip
+d9f53f6c4a20fffad4ea417742e3f750146007e239b8dd7565673ef547858ea7  RELEASE_NOTES_KO.md
+2aeb8546f5607f975f3b6db8b4b7966ab00cf8ae0ae81bfd612eb8647e60a215  director-update.json
+123ecbdff83f2b22426a93998debba3503406ea0c70397a9e910fa441733bc74  game-team-ready-desktop.png
+2a5341ac7a6259050a8ba09dc93260c5815590c672967d25aa4f0f8aa3e06d4e  game-team-ready-mobile.png
+894fc86aa85f85aafd559c322f4cac4ac207c514b29e09d7b0b67cd60ab320bb  update-public-key.txt
