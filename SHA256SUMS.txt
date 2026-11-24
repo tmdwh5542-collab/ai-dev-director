@@ -1,0 +1,5 @@
+a19d4e7665a109082163359e8a3723bdb9b181e323b4233ef251dca54d1f2fbb  AI-DEV-DIRECTOR-Windows-2026.11.24.4.zip
+730a9fbec9ff2e05ae0ceab63fc0a0ba7b73db7a8492ca3ff7451c78aa51df75  RELEASE_NOTES_KO.md
+b609fa3b22c2b1c8e4fc19f516a4b13715160eaac0320eba1da04ef05b31b516  automatic-28-staff.png
+4de84b41eab3543ad179da83a6daabde95f8af7f05582c993254afdc6c862b38  director-update.json
+894fc86aa85f85aafd559c322f4cac4ac207c514b29e09d7b0b67cd60ab320bb  update-public-key.txt
