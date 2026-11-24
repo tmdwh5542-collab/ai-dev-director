@@ -4,7 +4,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: publish-prepared-desktop-2026-11-24-1
+  group: publish-prepared-desktop-2026-11-24-2
   cancel-in-progress: false
 jobs:
   publish:
@@ -14,7 +14,7 @@ jobs:
       - name: Read immutable verified release assets
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: 5f6ca5329a3cad796679c34da069568f6ec8e3bf
+          ref: 9aec352ea6b9603825fac422431bc7d85d627104
           path: prepared
           persist-credentials: false
       - name: Verify hashes, upload assets, publish draft
@@ -25,11 +25,11 @@ jobs:
           python3 - <<'PYCODE'
           import hashlib, json, os, pathlib, urllib.parse, urllib.request
           repo = 'tmdwh5542-collab/ai-dev-director'
-          tag = 'v2026.11.24.1'
-          source = '4d789123e0de5524ae5acaedda421fc8a92ebf03'
+          tag = 'v2026.11.24.2'
+          source = 'e424a94ef394bbc46305608f1c708eb79892e32e'
           assert os.environ['GITHUB_REPOSITORY'] == repo
           root = pathlib.Path('prepared')
-          files = ['AI-DEV-DIRECTOR-Windows-2026.11.24.1.zip', 'RELEASE_NOTES_KO.md', 'SHA256SUMS.txt', 'director-update.json', 'game-team-ready-desktop.png', 'game-team-ready-mobile.png', 'update-public-key.txt']
+          files = ['AI-DEV-DIRECTOR-Windows-2026.11.24.2.zip', 'RELEASE_NOTES_KO.md', 'SHA256SUMS.txt', 'director-update.json', 'game-team-ready-desktop.png', 'game-team-ready-mobile.png', 'update-public-key.txt']
           for line in (root/'SHA256SUMS.txt').read_text().splitlines():
               digest, name = line.split('  ', 1)
               assert name in files and hashlib.sha256((root/name).read_bytes()).hexdigest() == digest, name
