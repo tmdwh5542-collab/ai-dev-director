@@ -20,6 +20,7 @@ window.OfficeRoom=departmentFilter;
 
 const STAGES={HERMES_ADVISORY:'Hermes 자료 분석·보고 중',MEETING_DISCUSSION:'회의 의견 검토 중',MEETING_SYNTHESIS:'회의 안건 종합 중',MEETING_REVIEW:'회의 독립 검토 중',CHAT:'요청 확인 중',MISSION_PLANNING:'다음 단계 계획 중',PLANNING:'지시서 작성 중',ORDER_READY:'구현 준비 중',BUILDING:'코드·리소스 구현 중',VERIFYING:'검증 단계',REVIEWING:'독립 검수 중',DECIDING:'결과 판단 중'};
 const STATUS={RUNNING:'진행 중',DONE:'완료',FAILED:'실패',BLOCKED:'확인 필요',STOPPED:'중단',INCOMPLETE:'예산 소진'};
+let rosterBootstrapBusy=false,rosterBootstrapFailed=false,rosterBootstrapDone=false,rosterBootstrapError='';
 let data=null,selected='planner',connected=false,polling=false,stopped=false,token=null,lastSuccess=0,nextPollAt=0,pollFailures=0;
 const svgNS='http://www.w3.org/2000/svg';
 function text(id,value){const node=$(id);value=String(value??'—');if(node.textContent!==value)node.textContent=value;}
@@ -156,13 +157,25 @@ function paint(){
  text('mission-state',mission?(mission.status==='RUNNING'&&!mission.live?'중단됨 · 재개 대기':STATUS[mission.status]||mission.status):'업무 대기');text('mission-goal',mission?.goal||'아직 미션 기록이 없습니다. 첫 업무를 지시해보세요.');paintDepartment();paintLedger();
  text('connection',connected?'실시간 연결':stopped?'중지됨':'연결 확인');$('connection-dot').classList.toggle('online',connected);
 }
-async function json(url,options={},signal){const r=await fetch(url,{cache:'no-store',...options,signal});const body=await r.json();if(!r.ok||body.error)throw Error(body.error||'서버 응답 '+r.status);return body;}
+async function json(url,options={},signal){const r=await fetch(url,{cache:'no-store',...options,signal});const body=await r.json();if(!r.ok||body.error){const error=Error(body.error||'서버 응답 '+r.status);error.status=r.status;throw error;}return body;}
+async function initializeRoster(){
+ if(rosterBootstrapBusy||rosterBootstrapFailed||rosterBootstrapDone||!data?.roster_bootstrap_needed||document.querySelector('dialog[open]'))return;
+ rosterBootstrapBusy=true;$('office-fill-staff').disabled=true;text('room-occupancy','직원 28명을 자동 구성하고 저장하고 있습니다…');
+ try{const auth=await json('/ops/roles');const result=await json('/ops/team/bootstrap',{method:'POST',headers:{'Content-Type':'application/json','X-Solomon-Bridge':auth.csrf},body:JSON.stringify({expected_revision:data.team.team.revision})});
+  if(!result.initialized){return;}
+  if(result.team.members.length!==28)throw Error('자동 구성 인원 저장 결과를 확인하지 못했습니다.');
+  data.team.team=result.team;data.roster_bootstrap_needed=false;rosterBootstrapDone=true;rosterBootstrapError='';teamRevision=null;
+  if(result.changed&&departmentFilter==='ceo'){departmentFilter='planning';try{localStorage.setItem('director.office.room',departmentFilter);}catch{}}
+  paint();
+ }catch(error){if(error.status===409){nextPollAt=0;return;}rosterBootstrapFailed=true;rosterBootstrapError='직원 자동 구성을 완료하지 못했습니다. '+error.message;$('office-error').hidden=false;text('office-error',rosterBootstrapError);}
+ finally{rosterBootstrapBusy=false;$('office-fill-staff').disabled=false;}
+}
 async function poll(){
  if(polling||stopped)return;polling=true;const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),8000);
  try{const payload=await json('/ops/office?team_revision='+encodeURIComponent(data?.team?.team?.revision||'')+'&company_revision='+encodeURIComponent(data?.company?.revision||''),{},controller.signal);
   const {activity,status,roles}=payload,team=payload.team||data?.team,company=payload.company||data?.company;
   if(!Array.isArray(activity?.working_now)||!Array.isArray(team?.team?.members)||!company)throw Error('작업 상태 응답을 확인할 수 없습니다.');
-  if(stopped)return;data={...payload,team,company};executive.setRevision(payload.briefing_revision);meetings.setRevision(payload.meeting_revision);hermes.setRevision(payload.hermes_revision);connected=true;lastSuccess=Date.now();pollFailures=0;nextPollAt=lastSuccess+(activity.working_now.length||payload.deliveries?.length||payload.meeting_active||payload.hermes_active?3000:8000);$('office-error').hidden=true;text('last-updated','최근 갱신 '+new Date(lastSuccess).toLocaleTimeString('ko-KR',{hour12:false}));paint();if(!company.company&&!setupShown){setupShown=true;companyEditor.open();}
+  if(stopped)return;data={...payload,team,company};if(!payload.roster_bootstrap_needed&&team.team.members.length===28){rosterBootstrapDone=true;rosterBootstrapFailed=false;rosterBootstrapError='';}executive.setRevision(payload.briefing_revision);meetings.setRevision(payload.meeting_revision);hermes.setRevision(payload.hermes_revision);connected=true;lastSuccess=Date.now();pollFailures=0;nextPollAt=lastSuccess+(activity.working_now.length||payload.deliveries?.length||payload.meeting_active||payload.hermes_active?3000:8000);$('office-error').hidden= !rosterBootstrapError;if(rosterBootstrapError)text('office-error',rosterBootstrapError);text('last-updated','최근 갱신 '+new Date(lastSuccess).toLocaleTimeString('ko-KR',{hour12:false}));paint();void initializeRoster();if(!company.company&&!setupShown){setupShown=true;companyEditor.open();}
 
  }catch(error){pollFailures++;nextPollAt=Date.now()+Math.min(30000,3000*2**Math.min(pollFailures-1,4));if(!stopped){connected=false;$('office-error').hidden=false;text('office-error','서버 연결을 확인하고 있습니다. 표시된 기록은 마지막 수신 내용이며, 현재 업무 상태는 확인되지 않았습니다. '+(error.name==='AbortError'?'응답 시간 초과':error.message));paint();}}
  finally{clearTimeout(timeout);polling=false;}
@@ -195,7 +208,7 @@ for(const role of Object.keys(DEPTS))createStation(role);select('CEO');
 const editor=window.OfficeTeamEditor({readJSON:json,getProject:()=>data?.status?.project_path,onSaved:(team,message)=>{if(team){if(data)data.team.team=team;poll();}else{$('office-error').hidden=false;text('office-error',message);}}});
 $('team-edit').onclick=()=>{if(!data?.company?.company){companyEditor.open();return;}editor.open();};
 $('company-edit').onclick=companyEditor.open;
-$('refresh').onclick=()=>{if(stopped){location.reload();return;}poll();};$('stop-missions').onclick=()=>control('stop-missions');$('shutdown').onclick=()=>control('shutdown');$('header-shutdown').onclick=()=>control('shutdown');
+$('refresh').onclick=()=>{if(stopped){location.reload();return;}rosterBootstrapFailed=false;rosterBootstrapError='';poll();};$('stop-missions').onclick=()=>control('stop-missions');$('shutdown').onclick=()=>control('shutdown');$('header-shutdown').onclick=()=>control('shutdown');
 let visualFrame=null;document.addEventListener('game-visual-change',()=>{if(!visualFrame)visualFrame=requestAnimationFrame(()=>{visualFrame=null;paint();});});
 setInterval(()=>{text('clock',new Date().toLocaleTimeString('ko-KR',{hour12:false}));if(connected&&Date.now()-lastSuccess>15000){connected=false;paint();}},1000);
 setInterval(()=>{if(!document.hidden&&Date.now()>=nextPollAt)poll();},1000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll();});poll();

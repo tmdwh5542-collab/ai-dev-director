@@ -53,7 +53,7 @@ def current():
     if company is not None and stored.get('office_art_revision', 0) < 2:
         company = {**company, 'visual_mode': 'cozy'}
     revision = hashlib.sha256(json.dumps(company, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:20]
-    return {'company': company, 'revision': revision, 'existing_team': bool(stored.get('members')), 'themes': THEMES, 'colors': COLORS}
+    return {'roster_initialized': stored.get('roster_initialized') is True, 'company': company, 'revision': revision, 'existing_team': bool(stored.get('members')), 'themes': THEMES, 'colors': COLORS}
 
 
 def save(value, expected_revision):

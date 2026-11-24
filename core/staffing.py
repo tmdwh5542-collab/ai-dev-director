@@ -108,7 +108,7 @@ def current():
     return validate(json.loads(path.read_text(encoding='utf-8')), require_ready=False) if path.exists() else default_team()
 
 
-def save(value, expected_revision):
+def save(value, expected_revision, *, roster_initialized=False):
     team=validate(value, require_ready=False)
     with LOCK:
         if expected_revision != current()['revision']:
@@ -117,6 +117,7 @@ def save(value, expected_revision):
         temporary=path.with_suffix('.tmp')
         stored=json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
         stored.pop('active_staff_ids', None)
+        if roster_initialized: stored['roster_initialized'] = True
         temporary.write_text(json.dumps({**stored, **team},ensure_ascii=False,indent=2),encoding='utf-8');temporary.replace(path)
     return team
 

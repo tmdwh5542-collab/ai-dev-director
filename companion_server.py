@@ -556,6 +556,19 @@ class CompanionHandler(d.DashboardHandler):
                 return self._send_json({'error': str(exc)}, 400)
             except OSError:
                 return self._send_json({'error': '회사 설정을 저장하지 못했습니다.'}, 500)
+        if self.path == '/ops/team/bootstrap':
+            if not d.is_request_origin_allowed(self.headers,self.server.server_address[1])[0] or not self.authorized():
+                return self._send_json({'error':'local authenticated request required'},403)
+            from core import game_team_setup, staffing
+            try:
+                size=int(self.headers.get('Content-Length') or 0)
+                if not 0<size<=2000 or self.headers.get('Content-Type','').split(';')[0]!='application/json':raise ValueError('직원 초기 구성 요청을 확인하세요.')
+                value=json.loads(self.rfile.read(size))
+                if not isinstance(value,dict) or set(value)!={'expected_revision'}:raise ValueError('직원 초기 구성 요청을 확인하세요.')
+                return self._send_json(game_team_setup.bootstrap(value['expected_revision']))
+            except staffing.TeamConflict as exc:return self._send_json({'error':str(exc)},409)
+            except (ValueError,TypeError) as exc:return self._send_json({'error':str(exc)},400)
+            except OSError:return self._send_json({'error':'직원 파일을 저장하지 못했습니다. 자동 구성 완료로 처리하지 않았습니다.'},503)
         if self.path in ('/ops/team/recommendations', '/ops/team/game-ready'):
             if not d.is_request_origin_allowed(self.headers, self.server.server_address[1])[0] or not self.authorized():
                 return self._send_json({'error': 'local authenticated request required'}, 403)
@@ -580,7 +593,7 @@ class CompanionHandler(d.DashboardHandler):
                     if not result['team_ready']:
                         raise ValueError('자동 구성을 저장하지 않았습니다. ' + ' '.join(result['blocked'] + result['missing_slots'] + result['missing_managers']))
                     checks = game_team_setup.readiness(result['prepared_team'], d.load_config(), payload.get('game_project_path', ''))
-                    saved = staffing.save(result['prepared_team'], payload.get('expected_revision'))
+                    saved = staffing.save(result['prepared_team'], payload.get('expected_revision'), roster_initialized=True)
                     if payload.get('goal', '').strip():
                         checks['starter_brief']['goal'] = payload['goal'].strip()
                     return self._send_json({'team': saved, 'department_plan': result['department_plan'], 'readiness': checks, 'message': '게임 개발팀을 저장했습니다. 다음 미션부터 적용됩니다.'})

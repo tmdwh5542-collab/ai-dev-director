@@ -180,3 +180,25 @@ def readiness(team, config, project_path=''):
     checks.append({'id': 'engine', 'title': '실제 엔진 실행·플레이 테스트', 'status': 'NOT_VERIFIED'})
     return {'checks': checks, 'engine': engine, 'authentication_verified': False, 'engine_execution_verified': False,
             'starter_brief': dict(STARTER), 'notice': '팀 저장과 개발 실행 준비를 구분합니다. AI 로그인·할당량과 엔진 설치·실행은 실제 PC에서 확인해야 합니다. 계정·키·도구를 자동 설치하거나 AI 작업을 시작하지 않습니다.'}
+
+
+def bootstrap(expected_revision):
+    """One-time persisted company roster initialization; never an AI/engine readiness gate."""
+    from core import company
+    from core.mission import MissionStore
+    state = company.current()
+    team = staffing.current()
+    if state.get('roster_initialized'):
+        return {'team': team, 'initialized': True, 'changed': False}
+    if not state.get('company'):
+        return {'team': team, 'initialized': False, 'changed': False, 'needs_owner': True}
+    if team['revision'] != expected_revision:
+        raise staffing.TeamConflict('다른 창에서 직원 구성이 바뀌었습니다. 새로고침 후 다시 확인합니다.')
+    if len(team['members']) == staffing.MAX_MEMBERS:
+        saved = staffing.save(team, expected_revision, roster_initialized=True)
+        return {'team': saved, 'initialized': True, 'changed': False}
+    plan = propose(team, MissionStore().all())
+    if not plan['team_ready'] or len(plan['prepared_team']['members']) != staffing.MAX_MEMBERS:
+        raise ValueError('직원 자동 구성을 저장하지 않았습니다. ' + ' '.join(plan['blocked'] + plan['missing_slots'] + plan['missing_managers']))
+    saved = staffing.save(plan['prepared_team'], expected_revision, roster_initialized=True)
+    return {'team': saved, 'initialized': True, 'changed': True, 'message': '직원 28명을 실제로 생성해 저장했습니다. 부서별 업무 배정은 1~2명입니다.'}

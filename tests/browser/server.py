@@ -22,10 +22,21 @@ from core.mission import MissionStore
 from core import usage
 
 d._ensure_schema()
+# Most UI scenarios deliberately edit their own roster; mark those fixtures as initialized.
+# The automatic-roster scenario sets DIRECTOR_UI_AUTO_ROSTER=1 and exercises real first-run behavior.
+if os.environ.get('DIRECTOR_UI_AUTO_ROSTER') != '1':
+    from core import company, staffing
+    original_company_save = company.save
+    def fixture_company_save(*args, **kwargs):
+        original_company_save(*args, **kwargs)
+        team = staffing.current()
+        staffing.save(team, team['revision'], roster_initialized=True)
+        return company.current()
+    company.save = fixture_company_save
 if os.environ.get('DIRECTOR_UI_LEGACY_COMPANY') == '1':
     from core import staffing, company
-    staffing.save(staffing.default_team(),staffing.current()['revision'])
-    company.save({'owner':{'name':'테스트 대표','character':{'gender':'male','age':35,'color':'gold'}},'theme':'corporate','visual_mode':'illustrated' if os.environ.get('DIRECTOR_UI_ILLUSTRATED')=='1' else 'pixel'},company.current()['revision'])
+    staffing.save(staffing.validate({'members': []},require_ready=False) if os.environ.get('DIRECTOR_UI_EMPTY_COMPANY')=='1' else staffing.default_team(),staffing.current()['revision'])
+    company.save({'owner':{'name':'테스트 대표','character':{'gender':'male','age':35,'color':'gold'}},'theme':'corporate','visual_mode':'cozy' if os.environ.get('DIRECTOR_UI_COZY')=='1' else 'illustrated' if os.environ.get('DIRECTOR_UI_ILLUSTRATED')=='1' else 'pixel'},company.current()['revision'])
 runtime = Path(sys.argv[1]) / "runtime"
 runtime.mkdir()
 d.DIRECTOR_ROOT = runtime
